@@ -7,7 +7,6 @@ export type InterviewerRole = "technical" | "personality" | "pressure";
 export interface InterviewerMeta {
   role: InterviewerRole;
   label: string; // 화면에 표시할 이름
-  emoji: string; // 구분용 아이콘
   description: string; // 짧은 소개
 }
 
@@ -22,19 +21,16 @@ export const INTERVIEWER_META: Record<InterviewerRole, InterviewerMeta> = {
   technical: {
     role: "technical",
     label: "기술 면접관",
-    emoji: "🛠️",
     description: "프로젝트 경험과 기술 선택의 근거를 파고듭니다",
   },
   personality: {
     role: "personality",
     label: "인성 면접관",
-    emoji: "🤝",
     description: "협업 경험과 갈등 상황 대처를 확인합니다",
   },
   pressure: {
     role: "pressure",
     label: "압박 면접관",
-    emoji: "🔥",
     description: "답변의 허점을 파고드는 후속 질문을 던집니다",
   },
 };

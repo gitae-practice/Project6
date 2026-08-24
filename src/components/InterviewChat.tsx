@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { UserRoundCog, UserRoundCheck, UserRoundSearch, type LucideIcon } from "lucide-react";
 import {
   INTERVIEWER_ORDER,
   INTERVIEWER_META,
   type InterviewerRole,
 } from "@/lib/interview/roles";
+
+// 면접관마다 다른 사람 아이콘을 부여한다 (톱니바퀴=기술, 체크=인성, 돋보기=압박/파고듦).
+const INTERVIEWER_ICON: Record<InterviewerRole, LucideIcon> = {
+  technical: UserRoundCog,
+  personality: UserRoundCheck,
+  pressure: UserRoundSearch,
+};
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -33,6 +41,7 @@ export function InterviewChat() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentRole = INTERVIEWER_ORDER[interviewerIndex];
+  const CurrentIcon = INTERVIEWER_ICON[currentRole];
   const currentMessages = history[currentRole];
 
   // 새 메시지가 추가될 때마다 대화창을 맨 아래로 스크롤
@@ -191,26 +200,29 @@ export function InterviewChat() {
     <div className="flex flex-1 flex-col">
       {/* 진행 상태 표시: 현재 어느 면접관 차례인지 */}
       <div className="flex justify-center gap-2 border-b border-border px-4 py-3">
-        {INTERVIEWER_ORDER.map((role, i) => (
-          <span
-            key={role}
-            className={`rounded-full px-3 py-1 text-sm ${
-              i === interviewerIndex
-                ? "bg-accent text-accent-foreground"
-                : i < interviewerIndex
-                  ? "bg-border text-muted"
-                  : "text-muted"
-            }`}
-          >
-            {INTERVIEWER_META[role].emoji} {INTERVIEWER_META[role].label}
-          </span>
-        ))}
+        {INTERVIEWER_ORDER.map((role, i) => {
+          const Icon = INTERVIEWER_ICON[role];
+          return (
+            <span
+              key={role}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                i === interviewerIndex
+                  ? "bg-accent text-accent-foreground"
+                  : i < interviewerIndex
+                    ? "bg-border text-muted"
+                    : "text-muted"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" /> {INTERVIEWER_META[role].label}
+            </span>
+          );
+        })}
       </div>
 
       {/* 현재 대화 중인 면접관 프로필 헤더 */}
       <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xl">
-          {INTERVIEWER_META[currentRole].emoji}
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+          <CurrentIcon className="h-5 w-5 text-accent" />
         </span>
         <div className="min-w-0">
           <p className="font-medium">{INTERVIEWER_META[currentRole].label}</p>
@@ -233,12 +245,17 @@ export function InterviewChat() {
                 </div>
               ) : (
                 <div key={i} className="flex max-w-[85%] items-start gap-2 self-start">
-                  {/* 면접관 아바타 — 역할별 이모지를 프로필처럼 표시 */}
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-base">
-                    {INTERVIEWER_META[currentRole].emoji}
+                  {/* 면접관 아바타 — 역할별 사람 아이콘으로 구분 (기술=톱니, 인성=체크, 압박=돋보기) */}
+                  <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+                    <CurrentIcon className="h-4 w-4 text-accent" />
                   </span>
-                  <div className="rounded-xl border border-border bg-surface px-4 py-3 leading-relaxed whitespace-pre-wrap">
-                    {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted">
+                      {INTERVIEWER_META[currentRole].label}
+                    </span>
+                    <div className="rounded-xl border border-border bg-surface px-4 py-3 leading-relaxed whitespace-pre-wrap">
+                      {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
+                    </div>
                   </div>
                 </div>
               )
