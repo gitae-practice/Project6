@@ -102,15 +102,20 @@ export function InterviewChat() {
     setIsStreaming(false);
   }
 
-  function handleStart() {
-    setStarted(true);
-    // 첫 질문을 받기 위한 트리거 메시지 (화면에는 표시하지 않음)
+  // 특정 면접관의 첫 질문을 받기 위한 트리거 메시지 (화면에는 표시하지 않음).
+  // "면접 시작하기"와 "다음 면접관으로" 두 곳에서 공용으로 쓴다.
+  function startInterviewer(role: InterviewerRole) {
     const kickoff: ChatTurn = {
       role: "user",
       content: "면접을 시작해주세요. 짧게 자기소개를 요청한 뒤 첫 질문을 해주세요.",
     };
-    setHistory((prev) => ({ ...prev, [currentRole]: [kickoff] }));
-    void sendMessage(currentRole, [kickoff]);
+    setHistory((prev) => ({ ...prev, [role]: [kickoff] }));
+    void sendMessage(role, [kickoff]);
+  }
+
+  function handleStart() {
+    setStarted(true);
+    startInterviewer(currentRole);
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -126,29 +131,41 @@ export function InterviewChat() {
   }
 
   function handleNextInterviewer() {
-    if (interviewerIndex + 1 >= INTERVIEWER_ORDER.length) {
+    const nextIndex = interviewerIndex + 1;
+    if (nextIndex >= INTERVIEWER_ORDER.length) {
       setFinished(true);
       return;
     }
-    setInterviewerIndex((i) => i + 1);
+    setInterviewerIndex(nextIndex);
     setSessionId(null); // 면접관이 바뀌면 새 세션으로 취급 (DB에는 role별로 이미 구분 저장됨)
+    startInterviewer(INTERVIEWER_ORDER[nextIndex]); // 다음 면접관의 첫 질문을 바로 받아온다
+  }
+
+  // 면접 종료 후 처음 상태로 되돌려서 새로 시작할 수 있게 한다.
+  function handleRestart() {
+    setStarted(false);
+    setFinished(false);
+    setInterviewerIndex(0);
+    setHistory(EMPTY_HISTORY);
+    setSessionId(null);
+    setInput("");
   }
 
   if (!started) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
         <h1 className="max-w-md text-3xl font-bold leading-snug sm:text-4xl">
-          모의 면접관 3인방
+          오늘의 면접관
         </h1>
         <p className="max-w-sm text-muted">
-          기술 → 인성 → 압박 면접관을 순서대로 만나는 AI 모의 면접입니다.
+          기술을 묻고, 사람을 보고, 압박을 견딘다.
         </p>
         <button
           type="button"
           onClick={handleStart}
           className="rounded-xl bg-accent px-6 py-3 font-medium text-accent-foreground transition-opacity hover:opacity-90"
         >
-          면접 시작하기
+          시작하기
         </button>
       </div>
     );
@@ -156,9 +173,16 @@ export function InterviewChat() {
 
   if (finished) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-2xl font-bold">면접 종료 🎉</p>
-        <p className="text-muted">세 명의 면접관과 대화를 모두 마쳤습니다. 수고하셨습니다.</p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-2xl font-bold">면접 종료</p>
+        <p className="text-muted">세 사람과의 대화를 모두 마쳤습니다. 수고하셨습니다.</p>
+        <button
+          type="button"
+          onClick={handleRestart}
+          className="rounded-xl border border-border px-5 py-2.5 text-sm transition-colors hover:border-accent hover:text-accent"
+        >
+          홈으로 돌아가기
+        </button>
       </div>
     );
   }

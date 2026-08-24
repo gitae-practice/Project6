@@ -30,3 +30,9 @@ create policy "temp_allow_all_sessions" on interview_sessions
 
 create policy "temp_allow_all_messages" on interview_messages
   for all using (true) with check (true);
+
+-- "Automatically expose new tables"를 꺼둔 상태라 RLS 정책과 별개로
+-- anon 역할에 테이블 자체 접근 권한(GRANT)을 직접 줘야 PostgREST가 응답한다.
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on interview_sessions to anon, authenticated;
+grant select, insert, update, delete on interview_messages to anon, authenticated;

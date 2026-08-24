@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "모의 면접관 3인방",
-  description: "기술·인성·압박 면접관 세 명과 순서대로 진행하는 AI 모의 면접",
+  title: "오늘의 면접관",
+  description: "기술을 묻고, 사람을 보고, 압박을 견딘다 — AI 면접관 세 명과 순서대로 진행하는 모의 면접",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
