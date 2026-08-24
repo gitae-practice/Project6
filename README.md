@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 모의 면접관 3인방
 
-## Getting Started
+기술 · 인성 · 압박 면접관 세 명을 순서대로 만나는 AI 모의 면접 웹앱
 
-First, run the development server:
+이직 준비 중 직접 필요해서 만든 프로젝트.
+성격이 다른 면접관 세 명이 순서대로 등장해 질문을 던지고, Claude가 실시간 스트리밍으로 답변한다.
+
+## 주요 기능
+
+- **3단계 면접 진행** — 기술 → 인성 → 압박 면접관 순서로 전환
+- **실시간 스트리밍 답변** — 면접관 질문이 타이핑되듯 출력
+- **대화 기록 DB 저장** — 세션별 질문/답변을 Supabase에 저장
+- **라이트 / 다크 테마 토글**
+
+## 기술 스택
+
+| 구분 | 기술 |
+|---|---|
+| 프레임워크 | Next.js 16 (App Router) + TypeScript |
+| 스타일 | Tailwind CSS v4 |
+| 백엔드 | Next.js Route Handler (Node.js 런타임) |
+| AI | Anthropic Claude API (`claude-sonnet-5`), 스트리밍 |
+| DB | Supabase (PostgreSQL) |
+
+## 실행 방법
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 환경변수 설정
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.local.example`을 복사해 `.env.local` 파일을 만들고 아래 값을 입력.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+```
 
-## Learn More
+## DB 설정
 
-To learn more about Next.js, take a look at the following resources:
+`supabase/schema.sql` 파일을 Supabase SQL Editor에서 실행하면 필요한 테이블이 생성된다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 다음 계획
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 이력서 / 직무 정보 입력 후 맞춤 질문 생성
+- 면접 종료 후 종합 피드백 리포트 (구조화된 JSON 출력)
+- 로그인(Supabase Auth) 붙이고 RLS를 본인 세션 전용 정책으로 좁히기

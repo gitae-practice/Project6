@@ -1,26 +1,41 @@
 @import "tailwindcss";
 
+/* Tailwind v4: .dark 클래스가 붙은 조상 아래에서 dark: 유틸리티가 적용되도록 설정 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f3ec; /* 웜 오트밀 */
+  --foreground: #241f1a; /* 짙은 브라운 계열 텍스트 */
+  --surface: #ffffff; /* 카드 등 표면 */
+  --border: #e6ddcf;
+  --muted: #786b5c;
+  --accent: #c2542e; /* 테라코타 포인트 컬러 */
+  --accent-foreground: #fdf7f1;
+}
+
+.dark {
+  --background: #1c1815;
+  --foreground: #f2ece2;
+  --surface: #262019;
+  --border: #3a3128;
+  --muted: #b3a495;
+  --accent: #e0703f;
+  --accent-foreground: #1c1815;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
