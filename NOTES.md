@@ -2,6 +2,13 @@
 
 ## 완료된 작업
 
+### 2026-08-24 (계속)
+- 엔드투엔드 실사용 테스트 완료 — Anthropic API 결제 후 실제 스트리밍 호출, Supabase insert까지 curl로 검증
+- Supabase "Automatically expose new tables" 꺼둔 상태라 anon 권한 GRANT 별도 실행 필요했음 (schema.sql에 반영)
+- 버그: "다음 면접관으로" 전환 시 첫 질문을 안 받아와서 화면이 비어 보이던 문제 수정 (`startInterviewer` 공용 함수로 리팩터링)
+- 브랜딩: 여러 후보(3개의 관문, 면접관은 셋 등) 검토 후 "오늘의 면접관"으로 확정, 부제 "기술을 묻고, 사람을 보고, 압박을 견딘다"
+- 면접 종료 화면에 "홈으로 돌아가기" 버튼 추가
+
 ### 2026-08-24
 - Next.js(App Router) + TypeScript + Tailwind CSS v4로 프로젝트 스캐폴딩
 - 웜 뉴트럴 + 테라코타 포인트 컬러 디자인 시스템 적용, 라이트/다크 토글 구현
