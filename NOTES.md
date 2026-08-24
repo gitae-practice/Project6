@@ -19,3 +19,7 @@
 - 이력서 / 직무 입력 폼 추가해서 첫 질문에 반영
 - 면접 종료 후 구조화된 평가 리포트(JSON, `output_config.format`) 생성 기능
 - 로그인(Supabase Auth) 붙이고 RLS 정책을 본인 세션 전용으로 좁히기
+- **STT/TTS 음성 입출력** — Web Speech API 사용, 비용 없음. 핵심 플로우(리포트 기능 등) 끝난 뒤 추가 예정
+  - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
+  - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기
+  - 주의: STT는 Chrome/Edge 계열만 안정적 지원, Firefox/Safari 불안정 — 데모는 크롬 기준으로

@@ -48,3 +48,4 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 - 이력서 / 직무 정보 입력 후 맞춤 질문 생성
 - 면접 종료 후 종합 피드백 리포트 (구조화된 JSON 출력)
 - 로그인(Supabase Auth) 붙이고 RLS를 본인 세션 전용 정책으로 좁히기
+- 음성 입출력 (STT/TTS, Web Speech API) — 답변을 음성으로 하고 질문을 음성으로 듣기
