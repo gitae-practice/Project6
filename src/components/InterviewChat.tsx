@@ -207,23 +207,42 @@ export function InterviewChat() {
         ))}
       </div>
 
+      {/* 현재 대화 중인 면접관 프로필 헤더 */}
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xl">
+          {INTERVIEWER_META[currentRole].emoji}
+        </span>
+        <div className="min-w-0">
+          <p className="font-medium">{INTERVIEWER_META[currentRole].label}</p>
+          <p className="truncate text-xs text-muted">{INTERVIEWER_META[currentRole].description}</p>
+        </div>
+      </div>
+
       {/* 대화 목록 */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {currentMessages
             .filter((m, i) => !(i === 0 && m.content.startsWith("면접을 시작해주세요"))) // 트리거 메시지는 화면에서 숨김
-            .map((message, i) => (
-              <div
-                key={i}
-                className={`max-w-[85%] rounded-xl px-4 py-3 leading-relaxed whitespace-pre-wrap ${
-                  message.role === "user"
-                    ? "self-end bg-accent text-accent-foreground"
-                    : "self-start border border-border bg-surface"
-                }`}
-              >
-                {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
-              </div>
-            ))}
+            .map((message, i) =>
+              message.role === "user" ? (
+                <div
+                  key={i}
+                  className="max-w-[85%] self-end rounded-xl bg-accent px-4 py-3 leading-relaxed whitespace-pre-wrap text-accent-foreground"
+                >
+                  {message.content}
+                </div>
+              ) : (
+                <div key={i} className="flex max-w-[85%] items-start gap-2 self-start">
+                  {/* 면접관 아바타 — 역할별 이모지를 프로필처럼 표시 */}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-base">
+                    {INTERVIEWER_META[currentRole].emoji}
+                  </span>
+                  <div className="rounded-xl border border-border bg-surface px-4 py-3 leading-relaxed whitespace-pre-wrap">
+                    {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
+                  </div>
+                </div>
+              )
+            )}
         </div>
       </div>
 
