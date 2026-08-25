@@ -66,7 +66,20 @@ export function InterviewChat() {
       body: JSON.stringify({ sessionId, interviewerRole: role, messages, jobRole, resumeSummary }),
     });
 
-    if (!response.body) {
+    // 세션 생성 등 스트리밍이 시작되기도 전에 서버가 실패하면(예: DB 오류) 일반 JSON 에러가 온다.
+    // 이 경우를 놓치면 화면이 조용히 멈춘 것처럼 보이므로 에러 메시지를 채팅창에 직접 띄운다.
+    if (!response.ok || !response.body) {
+      let message = "요청 처리 중 오류가 발생했습니다.";
+      try {
+        const data = (await response.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {
+        // 응답이 JSON이 아니면 기본 메시지를 그대로 사용
+      }
+      setHistory((prev) => ({
+        ...prev,
+        [role]: [...prev[role], { role: "assistant", content: `⚠️ ${message}` }],
+      }));
       setIsStreaming(false);
       return;
     }
@@ -109,6 +122,17 @@ export function InterviewChat() {
               ...last,
               content: last.content + payload.text,
             };
+            return { ...prev, [role]: updated };
+          });
+        }
+
+        // 스트리밍 도중 발생한 에러(예: Claude API 실패)도 화면에 바로 보이게 한다.
+        if (payload.error) {
+          setHistory((prev) => {
+            const updated = [...prev[role]];
+            const last = updated[updated.length - 1];
+            const prefix = last.content ? `${last.content}\n\n` : "";
+            updated[updated.length - 1] = { ...last, content: `${prefix}⚠️ ${payload.error}` };
             return { ...prev, [role]: updated };
           });
         }
