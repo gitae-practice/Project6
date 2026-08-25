@@ -16,12 +16,12 @@ interface InterviewRequestBody {
   interviewerRole: InterviewerRole;
   messages: ChatTurn[]; // 지금까지의 대화 전체 (Claude API는 상태를 저장하지 않음)
   jobRole?: string; // 지원 직무 (세션 최초 생성 시에만 저장됨)
-  resumeSummary?: string; // 이력서/경력 요약 (세션 최초 생성 시에만 저장됨)
+  resumeContent?: string; // 이력서 내용 (직접 입력 또는 PDF 추출, 세션 최초 생성 시에만 저장됨)
 }
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as InterviewRequestBody;
-  const { interviewerRole, messages, jobRole, resumeSummary } = body;
+  const { interviewerRole, messages, jobRole, resumeContent } = body;
   let { sessionId } = body;
 
   if (!SYSTEM_PROMPTS[interviewerRole]) {
@@ -30,11 +30,11 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
-  // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서 요약도 이때 함께 저장
+  // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서 내용도 이때 함께 저장
   if (!sessionId) {
     const { data, error } = await supabase
       .from("interview_sessions")
-      .insert({ job_role: jobRole || null, resume_summary: resumeSummary || null })
+      .insert({ job_role: jobRole || null, resume_content: resumeContent || null })
       .select("id")
       .single();
 

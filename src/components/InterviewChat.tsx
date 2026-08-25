@@ -40,7 +40,7 @@ export function InterviewChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [finished, setFinished] = useState(false);
   const [jobRole, setJobRole] = useState("");
-  const [resumeSummary, setResumeSummary] = useState("");
+  const [resumeContent, setResumeContent] = useState("");
   const [resumeFileName, setResumeFileName] = useState("");
   const [isExtractingResume, setIsExtractingResume] = useState(false);
   const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
@@ -65,8 +65,8 @@ export function InterviewChat() {
     const response = await fetch("/api/interview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // jobRole/resumeSummary는 세션이 처음 만들어질 때만 서버에서 사용되고, 이후 요청에선 무시된다.
-      body: JSON.stringify({ sessionId, interviewerRole: role, messages, jobRole, resumeSummary }),
+      // jobRole/resumeContent는 세션이 처음 만들어질 때만 서버에서 사용되고, 이후 요청에선 무시된다.
+      body: JSON.stringify({ sessionId, interviewerRole: role, messages, jobRole, resumeContent }),
     });
 
     // 세션 생성 등 스트리밍이 시작되기도 전에 서버가 실패하면(예: DB 오류) 일반 JSON 에러가 온다.
@@ -186,8 +186,8 @@ export function InterviewChat() {
         const data = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? "이력서 분석에 실패했습니다.");
       }
-      const data = (await response.json()) as { summary: string };
-      setResumeSummary(data.summary);
+      const data = (await response.json()) as { content: string };
+      setResumeContent(data.content);
     } catch (error) {
       setResumeUploadError(error instanceof Error ? error.message : "이력서 분석 중 오류가 발생했습니다.");
     } finally {
@@ -198,7 +198,7 @@ export function InterviewChat() {
   // 지원 직무/이력서 요약이 입력되어 있으면 첫 질문에 반영되도록 트리거 메시지에 같이 담는다.
   function buildKickoffMessage(): string {
     const job = jobRole.trim();
-    const resume = resumeSummary.trim();
+    const resume = resumeContent.trim();
     if (!job && !resume) {
       return "면접을 시작해주세요. 짧게 자기소개를 요청한 뒤 첫 질문을 해주세요.";
     }
@@ -255,7 +255,7 @@ export function InterviewChat() {
     setSessionId(null);
     setInput("");
     setJobRole("");
-    setResumeSummary("");
+    setResumeContent("");
     setResumeFileName("");
     setResumeUploadError(null);
     setReport(null);
@@ -307,19 +307,29 @@ export function InterviewChat() {
               className="rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <label htmlFor="resumeSummary" className="text-xs font-medium text-muted">
-                이력서 / 경력 요약 (선택)
-              </label>
-              {/* 타이핑 대신 PDF 업로드로도 채울 수 있게 하는 입구. Claude가 PDF를 직접 읽어 요약한다. */}
+          <div className="flex flex-col gap-2">
+            <label htmlFor="resumeContent" className="text-xs font-medium text-muted">
+              이력서 / 경력 (선택)
+            </label>
+
+            {/* PDF 업로드 — 직접 입력과 분리된 별도 영역. Claude가 PDF를 직접 읽어 내용을 채워준다. */}
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5">
+              <span className="flex-1 truncate text-xs text-muted">
+                {isExtractingResume
+                  ? "이력서 분석 중..."
+                  : resumeFileName
+                    ? `📎 ${resumeFileName}`
+                    : "PDF 이력서가 있다면 업로드해서 자동으로 채울 수 있어요"}
+              </span>
               <label
                 htmlFor="resumeFile"
-                className={`cursor-pointer text-xs underline-offset-2 hover:underline ${
-                  isExtractingResume ? "text-muted" : "text-accent"
+                className={`shrink-0 cursor-pointer rounded-lg border border-border px-3 py-1 text-xs transition-colors ${
+                  isExtractingResume
+                    ? "cursor-not-allowed text-muted"
+                    : "text-accent hover:border-accent"
                 }`}
               >
-                {isExtractingResume ? "이력서 분석 중..." : "PDF로 업로드"}
+                PDF 선택
               </label>
               <input
                 id="resumeFile"
@@ -330,18 +340,17 @@ export function InterviewChat() {
                 className="hidden"
               />
             </div>
+            {resumeUploadError && <p className="text-xs text-red-600">{resumeUploadError}</p>}
+
+            {/* 직접 입력 — 업로드하면 이 칸이 자동으로 채워지고, 이후에도 직접 수정 가능 */}
             <textarea
-              id="resumeSummary"
-              value={resumeSummary}
-              onChange={(e) => setResumeSummary(e.target.value)}
+              id="resumeContent"
+              value={resumeContent}
+              onChange={(e) => setResumeContent(e.target.value)}
               rows={4}
-              placeholder="최근 프로젝트, 주요 기술 스택 등을 간단히 적어주세요"
+              placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적거나 위에서 PDF를 업로드하세요"
               className="resize-none rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
             />
-            {resumeFileName && !resumeUploadError && (
-              <p className="truncate text-xs text-muted">📎 {resumeFileName}</p>
-            )}
-            {resumeUploadError && <p className="text-xs text-red-600">{resumeUploadError}</p>}
           </div>
         </div>
 
