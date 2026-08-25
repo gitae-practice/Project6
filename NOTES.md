@@ -2,6 +2,12 @@
 
 ## 완료된 작업
 
+### 2026-08-25 (계속 2)
+- PDF 업로드 구조 재설계: 추출 내용을 텍스트박스에 넣지 않고 `resumeFileText`로 별도 보관, 수기 입력(`resumeContent`)과는 완전히 분리
+- 면접관에게는 두 소스를 합친 `combinedResumeContent`를 전달 — 실제로 수기 입력+PDF 내용 둘 다 반영되는지 curl로 검증 완료 (두 정보의 차이까지 짚어서 질문함)
+- "시작하기" 버튼을 이력서 분석 중(isExtractingResume)에는 비활성화 — 분석 완료 후에만 면접 시작 가능
+- 컬럼명 resume_summary → resume_content 변경, Supabase RENAME COLUMN + PostgREST 스키마 캐시 이슈 대응(NOTIFY pgrst 안내)
+
 ### 2026-08-25 (계속)
 - 버그 수정: job_role/resume_summary 컬럼을 Supabase에 반영 안 해서 /api/interview 500 에러 나던 문제 — schema.sql 재실행으로 해결
 - 프론트: 서버 에러(non-ok 응답, 스트리밍 도중 에러) 발생 시 채팅창에 바로 표시하도록 개선 (이전엔 조용히 멈춤)
