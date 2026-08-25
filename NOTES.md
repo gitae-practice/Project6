@@ -2,6 +2,16 @@
 
 ## 완료된 작업
 
+### 2026-08-25
+- 이력서/직무 입력 폼 추가 (시작 화면, 선택 입력) — 입력 시 첫 질문 kickoff 메시지에 반영
+- 면접관 전환 시 sessionId를 새로 만들지 않고 유지하도록 변경 (세션 하나 = 면접 한 판 전체)
+- interview_sessions에 job_role/resume_summary 컬럼 추가
+- `/api/interview/report` 신규 — zod 스키마 + `output_config.format`으로 구조화된 평가 리포트 생성 (종합점수/총평/면접관별피드백/강점/보완점)
+- "면접 마치기" 클릭 시 자동으로 리포트 생성 → 종료 화면에 카드로 표시
+- 실제 curl 테스트로 리포트 API 정상 작동 확인
+- Vercel 배포는 후순위로 미루기로 결정 (코드에 영향 없음, 사용자 확인됨)
+- next.config.ts에 devIndicators: false 추가 (개발 모드 좌하단 N 배지 제거)
+
 ### 2026-08-24 (계속)
 - 엔드투엔드 실사용 테스트 완료 — Anthropic API 결제 후 실제 스트리밍 호출, Supabase insert까지 curl로 검증
 - Supabase "Automatically expose new tables" 꺼둔 상태라 anon 권한 GRANT 별도 실행 필요했음 (schema.sql에 반영)

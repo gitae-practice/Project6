@@ -8,7 +8,9 @@
 ## 주요 기능
 
 - **3단계 면접 진행** — 기술 → 인성 → 압박 면접관 순서로 전환
+- **지원 직무 / 이력서 요약 입력(선택)** — 입력하면 첫 질문에 바로 반영
 - **실시간 스트리밍 답변** — 면접관 질문이 타이핑되듯 출력
+- **종합 평가 리포트** — 면접 종료 후 점수·총평·면접관별 피드백·강점/보완점을 JSON 구조화 출력으로 생성
 - **대화 기록 DB 저장** — 세션별 질문/답변을 Supabase에 저장
 - **라이트 / 다크 테마 토글**
 
@@ -18,8 +20,9 @@
 |---|---|
 | 프레임워크 | Next.js 16 (App Router) + TypeScript |
 | 스타일 | Tailwind CSS v4 |
+| 아이콘 | lucide-react |
 | 백엔드 | Next.js Route Handler (Node.js 런타임) |
-| AI | Anthropic Claude API (`claude-sonnet-5`), 스트리밍 |
+| AI | Anthropic Claude API (`claude-sonnet-5`), 스트리밍 + 구조화된 출력(zod) |
 | DB | Supabase (PostgreSQL) |
 
 ## 실행 방법
@@ -45,7 +48,6 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 
 ## 다음 계획
 
-- 이력서 / 직무 정보 입력 후 맞춤 질문 생성
-- 면접 종료 후 종합 피드백 리포트 (구조화된 JSON 출력)
 - 로그인(Supabase Auth) 붙이고 RLS를 본인 세션 전용 정책으로 좁히기
 - 음성 입출력 (STT/TTS, Web Speech API) — 답변을 음성으로 하고 질문을 음성으로 듣기
+- Vercel 배포 (최우선순위는 아니고 나중에 진행 예정)
