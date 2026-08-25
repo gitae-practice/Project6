@@ -40,8 +40,9 @@ export function InterviewChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [finished, setFinished] = useState(false);
   const [jobRole, setJobRole] = useState("");
-  const [resumeContent, setResumeContent] = useState("");
+  const [resumeContent, setResumeContent] = useState(""); // 텍스트박스 수기 입력 (PDF와 무관하게 별개로 유지)
   const [resumeFileName, setResumeFileName] = useState("");
+  const [resumeFileText, setResumeFileText] = useState(""); // PDF에서 추출한 내용 — 화면에 노출하지 않고 기억만 해둠
   const [isExtractingResume, setIsExtractingResume] = useState(false);
   const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
   const [report, setReport] = useState<InterviewReport | null>(null);
@@ -52,6 +53,9 @@ export function InterviewChat() {
   const currentRole = INTERVIEWER_ORDER[interviewerIndex];
   const CurrentIcon = INTERVIEWER_ICON[currentRole];
   const currentMessages = history[currentRole];
+
+  // 수기 입력 + PDF에서 추출한 내용을 합쳐서 면접관에게 넘긴다. 둘 다 선택 사항이라 둘 다 비어있을 수도 있다.
+  const combinedResumeContent = [resumeContent.trim(), resumeFileText.trim()].filter(Boolean).join("\n\n");
 
   // 새 메시지가 추가될 때마다 대화창을 맨 아래로 스크롤
   useEffect(() => {
@@ -66,7 +70,13 @@ export function InterviewChat() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // jobRole/resumeContent는 세션이 처음 만들어질 때만 서버에서 사용되고, 이후 요청에선 무시된다.
-      body: JSON.stringify({ sessionId, interviewerRole: role, messages, jobRole, resumeContent }),
+      body: JSON.stringify({
+        sessionId,
+        interviewerRole: role,
+        messages,
+        jobRole,
+        resumeContent: combinedResumeContent,
+      }),
     });
 
     // 세션 생성 등 스트리밍이 시작되기도 전에 서버가 실패하면(예: DB 오류) 일반 JSON 에러가 온다.
@@ -187,7 +197,7 @@ export function InterviewChat() {
         throw new Error(data?.error ?? "이력서 분석에 실패했습니다.");
       }
       const data = (await response.json()) as { content: string };
-      setResumeContent(data.content);
+      setResumeFileText(data.content); // 텍스트박스(resumeContent)에는 넣지 않고 별도로 기억만 해둔다
     } catch (error) {
       setResumeUploadError(error instanceof Error ? error.message : "이력서 분석 중 오류가 발생했습니다.");
     } finally {
@@ -198,7 +208,7 @@ export function InterviewChat() {
   // 지원 직무/이력서 요약이 입력되어 있으면 첫 질문에 반영되도록 트리거 메시지에 같이 담는다.
   function buildKickoffMessage(): string {
     const job = jobRole.trim();
-    const resume = resumeContent.trim();
+    const resume = combinedResumeContent;
     if (!job && !resume) {
       return "면접을 시작해주세요. 짧게 자기소개를 요청한 뒤 첫 질문을 해주세요.";
     }
@@ -257,6 +267,7 @@ export function InterviewChat() {
     setJobRole("");
     setResumeContent("");
     setResumeFileName("");
+    setResumeFileText("");
     setResumeUploadError(null);
     setReport(null);
     setReportError(null);
@@ -312,14 +323,14 @@ export function InterviewChat() {
               이력서 / 경력 (선택)
             </label>
 
-            {/* PDF 업로드 — 직접 입력과 분리된 별도 영역. Claude가 PDF를 직접 읽어 내용을 채워준다. */}
+            {/* PDF 업로드 — 텍스트박스와는 별개. 내용을 화면에 보여주지 않고 면접관이 "기억"만 하게 한다. */}
             <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5">
               <span className="flex-1 truncate text-xs text-muted">
                 {isExtractingResume
-                  ? "이력서 분석 중..."
-                  : resumeFileName
-                    ? `📎 ${resumeFileName}`
-                    : "PDF 이력서가 있다면 업로드해서 자동으로 채울 수 있어요"}
+                  ? "PDF를 읽고 있습니다..."
+                  : resumeFileText
+                    ? `✅ ${resumeFileName} 분석 완료 — 면접관이 참고합니다`
+                    : "PDF 이력서가 있다면 업로드해보세요 (면접관이 내용을 기억하고 질문합니다)"}
               </span>
               <label
                 htmlFor="resumeFile"
@@ -342,13 +353,13 @@ export function InterviewChat() {
             </div>
             {resumeUploadError && <p className="text-xs text-red-600">{resumeUploadError}</p>}
 
-            {/* 직접 입력 — 업로드하면 이 칸이 자동으로 채워지고, 이후에도 직접 수정 가능 */}
+            {/* 직접 입력 — PDF 업로드와 무관하게 순수 수기 입력용 */}
             <textarea
               id="resumeContent"
               value={resumeContent}
               onChange={(e) => setResumeContent(e.target.value)}
               rows={4}
-              placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적거나 위에서 PDF를 업로드하세요"
+              placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적어주세요 (선택)"
               className="resize-none rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
             />
           </div>
@@ -357,9 +368,10 @@ export function InterviewChat() {
         <button
           type="button"
           onClick={handleStart}
-          className="rounded-xl bg-accent px-6 py-3 font-medium text-accent-foreground transition-opacity hover:opacity-90"
+          disabled={isExtractingResume}
+          className="rounded-xl bg-accent px-6 py-3 font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          시작하기
+          {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
         </button>
       </div>
     );
