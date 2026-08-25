@@ -41,6 +41,9 @@ export function InterviewChat() {
   const [finished, setFinished] = useState(false);
   const [jobRole, setJobRole] = useState("");
   const [resumeSummary, setResumeSummary] = useState("");
+  const [resumeFileName, setResumeFileName] = useState("");
+  const [isExtractingResume, setIsExtractingResume] = useState(false);
+  const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -142,6 +145,56 @@ export function InterviewChat() {
     setIsStreaming(false);
   }
 
+  // PDF 파일을 base64 문자열로 변환한다 (data: 접두사는 잘라낸다).
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+      reader.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 이력서 PDF를 업로드하면 Claude가 직접 내용을 읽어 요약하고, 그 결과로 "이력서/경력 요약" 칸을 채운다.
+  // 별도 OCR 라이브러리 없이 Claude의 문서(document) 입력 기능을 그대로 사용한다.
+  async function handleResumeFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // 같은 파일을 다시 선택해도 onChange가 발생하도록 초기화
+    if (!file) return;
+
+    setResumeUploadError(null);
+
+    if (file.type !== "application/pdf") {
+      setResumeUploadError("PDF 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setResumeUploadError("파일이 너무 큽니다 (10MB 이하).");
+      return;
+    }
+
+    setResumeFileName(file.name);
+    setIsExtractingResume(true);
+    try {
+      const fileBase64 = await fileToBase64(file);
+      const response = await fetch("/api/interview/extract-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileBase64 }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "이력서 분석에 실패했습니다.");
+      }
+      const data = (await response.json()) as { summary: string };
+      setResumeSummary(data.summary);
+    } catch (error) {
+      setResumeUploadError(error instanceof Error ? error.message : "이력서 분석 중 오류가 발생했습니다.");
+    } finally {
+      setIsExtractingResume(false);
+    }
+  }
+
   // 지원 직무/이력서 요약이 입력되어 있으면 첫 질문에 반영되도록 트리거 메시지에 같이 담는다.
   function buildKickoffMessage(): string {
     const job = jobRole.trim();
@@ -203,6 +256,8 @@ export function InterviewChat() {
     setInput("");
     setJobRole("");
     setResumeSummary("");
+    setResumeFileName("");
+    setResumeUploadError(null);
     setReport(null);
     setReportError(null);
   }
@@ -253,9 +308,28 @@ export function InterviewChat() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="resumeSummary" className="text-xs font-medium text-muted">
-              이력서 / 경력 요약 (선택)
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="resumeSummary" className="text-xs font-medium text-muted">
+                이력서 / 경력 요약 (선택)
+              </label>
+              {/* 타이핑 대신 PDF 업로드로도 채울 수 있게 하는 입구. Claude가 PDF를 직접 읽어 요약한다. */}
+              <label
+                htmlFor="resumeFile"
+                className={`cursor-pointer text-xs underline-offset-2 hover:underline ${
+                  isExtractingResume ? "text-muted" : "text-accent"
+                }`}
+              >
+                {isExtractingResume ? "이력서 분석 중..." : "PDF로 업로드"}
+              </label>
+              <input
+                id="resumeFile"
+                type="file"
+                accept="application/pdf"
+                onChange={handleResumeFileChange}
+                disabled={isExtractingResume}
+                className="hidden"
+              />
+            </div>
             <textarea
               id="resumeSummary"
               value={resumeSummary}
@@ -264,6 +338,10 @@ export function InterviewChat() {
               placeholder="최근 프로젝트, 주요 기술 스택 등을 간단히 적어주세요"
               className="resize-none rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
             />
+            {resumeFileName && !resumeUploadError && (
+              <p className="truncate text-xs text-muted">📎 {resumeFileName}</p>
+            )}
+            {resumeUploadError && <p className="text-xs text-red-600">{resumeUploadError}</p>}
           </div>
         </div>
 
