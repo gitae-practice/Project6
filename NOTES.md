@@ -52,11 +52,17 @@
 
 ## 다음 할 일
 
-- Supabase 프로젝트 실제 생성 후 `.env.local` 연결 테스트 (계정 생성 진행 중)
-- 이력서 / 직무 입력 폼 추가해서 첫 질문에 반영
-- 면접 종료 후 구조화된 평가 리포트(JSON, `output_config.format`) 생성 기능
-- 로그인(Supabase Auth) 붙이고 RLS 정책을 본인 세션 전용으로 좁히기
-- **STT/TTS 음성 입출력** — Web Speech API 사용, 비용 없음. 핵심 플로우(리포트 기능 등) 끝난 뒤 추가 예정
+- **유저별 면접 히스토리 (다음 세션 최우선)** — "지난 면접 때는 어땠는지" 돌아볼 수 있게
+  - `interview_reports` 테이블 신규: session_id(unique, FK) / overall_score / summary / interviewer_feedback(jsonb) / strengths(text[]) / improvements(text[]) / created_at
+  - RLS: session_id로 interview_sessions 소유권 확인하는 방식 (메시지 테이블과 동일 패턴)
+  - `/api/interview/report`가 sessionId도 받아서 생성한 리포트를 이 테이블에 upsert하도록 수정 (지금은 화면에 한 번 보여주고 버려짐)
+  - `InterviewChat.tsx`의 리포트 생성 호출부에서 `sessionId` 같이 전송하도록 수정
+  - `/history` 목록 페이지 — 로그인한 유저의 지난 세션들(날짜, 지원 직무, 점수) 나열
+  - `/history/[id]` 상세 페이지 — 리포트 카드 + 전체 대화 내역
+  - 헤더에 "지난 기록" 이동 링크 추가
+  - (2026-08-26에 한 번 만들었다가 오늘 안에 못 끝내서 원복함 — schema.sql은 현재 리포트 테이블 없는 상태)
+- STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기
   - 주의: STT는 Chrome/Edge 계열만 안정적 지원, Firefox/Safari 불안정 — 데모는 크롬 기준으로
+- Vercel 배포 (최후순위로 미뤄둠)
