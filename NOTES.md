@@ -2,6 +2,14 @@
 
 ## 완료된 작업
 
+### 2026-08-26
+- Supabase Auth 로그인/회원가입 추가 (AuthForm, LogoutButton), page.tsx에서 서버 사이드로 로그인 분기
+- Next.js 16 대응: middleware.ts → proxy.ts로 전환 (파일명/함수명만 변경, 기능 동일) — 세션 쿠키 자동 갱신
+- interview_sessions에 user_id 컬럼 추가, RLS를 "본인 세션만" 정책으로 전면 교체
+- 세 API 라우트(/api/interview, /extract-resume, /report) 전부 인증 체크 추가 — 비로그인 직접 호출 401 확인
+- curl로 비로그인 상태 API 차단 + 홈 화면 로그인 폼 렌더링 검증 완료
+- 남은 확인: 실제 회원가입→로그인→면접 진행→DB user_id 저장까지는 브라우저에서 직접 테스트 필요 (이메일 확인 설정에 따라 흐름이 달라질 수 있음)
+
 ### 2026-08-25 (계속 2)
 - PDF 업로드 구조 재설계: 추출 내용을 텍스트박스에 넣지 않고 `resumeFileText`로 별도 보관, 수기 입력(`resumeContent`)과는 완전히 분리
 - 면접관에게는 두 소스를 합친 `combinedResumeContent`를 전달 — 실제로 수기 입력+PDF 내용 둘 다 반영되는지 curl로 검증 완료 (두 정보의 차이까지 짚어서 질문함)
