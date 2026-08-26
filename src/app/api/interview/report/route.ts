@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic, INTERVIEW_MODEL } from "@/lib/anthropic";
 import { INTERVIEWER_META, INTERVIEWER_ORDER, type InterviewerRole } from "@/lib/interview/roles";
 import { InterviewReportSchema } from "@/lib/interview/report";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,14 @@ function buildTranscript(history: HistoryByRole): string {
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   const { history } = (await request.json()) as { history: HistoryByRole };
 
   const transcript = buildTranscript(history);

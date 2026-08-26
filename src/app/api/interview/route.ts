@@ -30,11 +30,19 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
+  // 로그인 안 된 상태로는 API를 직접 호출해도 막는다 (Claude 크레딧 무단 소모 방지).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서 내용도 이때 함께 저장
   if (!sessionId) {
     const { data, error } = await supabase
       .from("interview_sessions")
-      .insert({ job_role: jobRole || null, resume_content: resumeContent || null })
+      .insert({ user_id: user.id, job_role: jobRole || null, resume_content: resumeContent || null })
       .select("id")
       .single();
 

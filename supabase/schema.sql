@@ -1,9 +1,10 @@
--- Project6: 모의 면접관 3인방 DB 스키마
+-- Project6: 오늘의 면접관 DB 스키마
 -- Supabase 프로젝트 생성 후 SQL Editor에서 이 파일 내용을 실행한다.
 
 -- 면접 세션 하나 = 대화 한 판 (기술/인성/압박 면접관 순회 전체)
 create table if not exists interview_sessions (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade, -- 이 세션의 소유자
   job_role text, -- 지원 직무 (선택 입력)
   resume_content text, -- 이력서 내용: 직접 입력 또는 PDF 업로드 시 Claude가 추출한 원문 (선택 입력)
   created_at timestamptz not null default now()
@@ -12,6 +13,7 @@ create table if not exists interview_sessions (
 -- 이미 만들어진 테이블에 새 컬럼을 추가하는 경우를 위한 안전한 재실행용 구문
 alter table interview_sessions add column if not exists job_role text;
 alter table interview_sessions add column if not exists resume_content text;
+alter table interview_sessions add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
 -- 세션 안의 개별 메시지 (사용자 답변 / 면접관 질문·피드백)
 create table if not exists interview_messages (
@@ -26,19 +28,54 @@ create table if not exists interview_messages (
 create index if not exists interview_messages_session_id_idx
   on interview_messages (session_id);
 
--- 로그인 기능 도입 전까지는 임시로 전체 허용 정책을 둔다.
--- Auth 붙이는 다음 단계에서 반드시 "본인 세션만 접근 가능"으로 좁혀야 함 (NOTES.md 참고).
 alter table interview_sessions enable row level security;
 alter table interview_messages enable row level security;
 
-create policy "temp_allow_all_sessions" on interview_sessions
-  for all using (true) with check (true);
+-- 로그인 붙이기 전 임시로 썼던 전체 허용 정책 — 있으면 지운다 (재실행 안전하게)
+drop policy if exists "temp_allow_all_sessions" on interview_sessions;
+drop policy if exists "temp_allow_all_messages" on interview_messages;
 
-create policy "temp_allow_all_messages" on interview_messages
-  for all using (true) with check (true);
+-- 본인 세션만 조회/생성/수정/삭제 가능
+drop policy if exists "select_own_sessions" on interview_sessions;
+drop policy if exists "insert_own_sessions" on interview_sessions;
+drop policy if exists "update_own_sessions" on interview_sessions;
+drop policy if exists "delete_own_sessions" on interview_sessions;
+
+create policy "select_own_sessions" on interview_sessions
+  for select using (auth.uid() = user_id);
+
+create policy "insert_own_sessions" on interview_sessions
+  for insert with check (auth.uid() = user_id);
+
+create policy "update_own_sessions" on interview_sessions
+  for update using (auth.uid() = user_id);
+
+create policy "delete_own_sessions" on interview_sessions
+  for delete using (auth.uid() = user_id);
+
+-- 메시지는 자기 소유 세션에 달린 것만 접근 가능 (세션 테이블을 통해 소유권 확인)
+drop policy if exists "select_own_messages" on interview_messages;
+drop policy if exists "insert_own_messages" on interview_messages;
+
+create policy "select_own_messages" on interview_messages
+  for select using (
+    exists (
+      select 1 from interview_sessions s
+      where s.id = interview_messages.session_id and s.user_id = auth.uid()
+    )
+  );
+
+create policy "insert_own_messages" on interview_messages
+  for insert with check (
+    exists (
+      select 1 from interview_sessions s
+      where s.id = interview_messages.session_id and s.user_id = auth.uid()
+    )
+  );
 
 -- "Automatically expose new tables"를 꺼둔 상태라 RLS 정책과 별개로
--- anon 역할에 테이블 자체 접근 권한(GRANT)을 직접 줘야 PostgREST가 응답한다.
-grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on interview_sessions to anon, authenticated;
-grant select, insert, update, delete on interview_messages to anon, authenticated;
+-- 테이블 자체 접근 권한(GRANT)을 직접 줘야 PostgREST가 응답한다.
+-- anon(비로그인)은 이제 필요 없지만, 혹시 남겨둔 다른 용도가 있을까봐 authenticated만 명시적으로 부여.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on interview_sessions to authenticated;
+grant select, insert, update, delete on interview_messages to authenticated;

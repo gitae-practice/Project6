@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { anthropic, INTERVIEW_MODEL } from "@/lib/anthropic";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,14 @@ interface ExtractResumeRequestBody {
 // 요약이 아니라 "텍스트 추출"을 시킨다 — 3~5문장으로 압축하면 프로젝트명, 세부 경험 같은
 // 구체적인 내용이 날아가서 면접관이 덜 구체적인 질문을 하게 되기 때문.
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
   const { fileBase64 } = (await request.json()) as ExtractResumeRequestBody;
 
   if (!fileBase64) {
