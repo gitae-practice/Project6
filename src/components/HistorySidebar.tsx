@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BrainCircuit, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
+import { AppLogoIcon } from "@/components/AppLogoIcon";
 
 // 사이드바에는 리포트가 이미 생성된(=완료된) 세션만 넣으므로 overallScore는 항상 존재한다.
 export interface HistorySidebarItem {
@@ -33,7 +34,7 @@ export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) 
     >
       <div className="flex items-center justify-between gap-2 px-4 py-4">
         <div className="flex items-center gap-2">
-          <BrainCircuit className="h-6 w-6 text-accent" />
+          <AppLogoIcon />
           <span className="font-semibold tracking-tight">오늘의 면접관</span>
         </div>
         {/* 닫기 버튼은 모바일 드로어에서만 필요 */}
