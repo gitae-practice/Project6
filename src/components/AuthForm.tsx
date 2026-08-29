@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrainCircuit, Mail, Lock, Code2, Heart, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Mode = "login" | "signup";
 
@@ -58,7 +59,12 @@ export function AuthForm() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background md:flex-row">
+    <div className="relative flex min-h-dvh flex-col bg-background md:flex-row">
+      {/* 로그인 화면은 별도 헤더가 없으므로 라이트/다크 토글을 우측 상단에 고정 배치한다 */}
+      <div className="absolute right-4 top-4 z-10">
+        <ThemeToggle />
+      </div>
+
       {/* 좌측: 브랜딩 패널 — 작은 화면에서는 숨기고 폼만 보여준다 */}
       <div className="dot-grid relative hidden flex-1 flex-col justify-between overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.15),transparent_55%)] p-10 md:flex">
         <div className="flex items-center gap-2">
