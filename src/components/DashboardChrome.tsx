@@ -27,7 +27,7 @@ export function DashboardChrome({
           type="button"
           onClick={() => setIsSidebarOpen(true)}
           aria-label="메뉴 열기"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-accent"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-accent"
         >
           <Menu className="h-5 w-5" />
         </button>

@@ -22,11 +22,10 @@ export function ThemeToggle() {
     moonRef.current?.classList.toggle("hidden", dark);
   }
 
-  // 기본 테마는 라이트모드 — 시스템이 다크모드여도 사용자가 직접 토글하기 전까지는 라이트로 시작한다.
-  // (localStorage에 저장된 값이 있으면 그 값을 그대로 따른다)
+  // 기본 테마는 다크모드 — localStorage에 저장된 값이 있으면 그 값을 우선한다.
   useEffect(() => {
     const stored = localStorage.getItem("theme");
-    applyTheme(stored === "dark");
+    applyTheme(stored ? stored === "dark" : true);
   }, []);
 
   function toggle() {
@@ -41,13 +40,13 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label="테마 전환"
       title="테마 전환"
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-accent"
+      className="flex h-11 w-11 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-accent"
     >
       <span ref={sunRef} className="hidden">
-        <Sun className="h-4 w-4" />
+        <Sun className="h-5 w-5" />
       </span>
       <span ref={moonRef}>
-        <Moon className="h-4 w-4" />
+        <Moon className="h-5 w-5" />
       </span>
     </button>
   );
