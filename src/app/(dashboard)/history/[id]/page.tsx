@@ -81,14 +81,13 @@ export default async function HistoryDetailPage(props: PageProps<"/history/[id]"
                   </span>
                   <p className="font-medium">{INTERVIEWER_META[role].label}</p>
                 </div>
-                <div className="flex flex-col gap-3 pl-2">
+                {/* 위 리포트 카드(Bento grid)와 가로 폭을 맞추기 위해 말풍선을 좌우로 좁히지 않고 컨테이너 전체 너비로 채운다 */}
+                <div className="flex flex-col gap-3">
                   {turns.map((turn, i) => (
                     <div
                       key={i}
-                      className={`max-w-[85%] rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                        turn.sender === "user"
-                          ? "self-end border border-accent/20 bg-accent/10"
-                          : "glass-card self-start"
+                      className={`w-full rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                        turn.sender === "user" ? "border border-accent/20 bg-accent/10" : "glass-card"
                       }`}
                     >
                       {turn.content}
