@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Mail, Lock, Code2, Heart, Zap } from "lucide-react";
+import { Mail, Lock, Code2, Heart, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AppLogoIcon } from "@/components/AppLogoIcon";
 
 type Mode = "login" | "signup";
 
@@ -68,7 +69,7 @@ export function AuthForm() {
       {/* 좌측: 브랜딩 패널 — 작은 화면에서는 숨기고 폼만 보여준다 */}
       <div className="dot-grid relative hidden flex-1 flex-col justify-between overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.15),transparent_55%)] p-10 md:flex">
         <div className="flex items-center gap-2">
-          <BrainCircuit className="h-9 w-9 text-accent" />
+          <AppLogoIcon />
           <span className="text-lg font-semibold">오늘의 면접관</span>
         </div>
 
@@ -94,7 +95,7 @@ export function AuthForm() {
       <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-surface px-6 py-12">
         <div className="flex w-full max-w-sm flex-col gap-1 md:hidden">
           <div className="mb-4 flex items-center justify-center gap-2">
-            <BrainCircuit className="h-7 w-7 text-accent" />
+            <AppLogoIcon />
             <span className="font-semibold">오늘의 면접관</span>
           </div>
         </div>

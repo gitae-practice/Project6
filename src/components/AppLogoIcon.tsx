@@ -6,9 +6,9 @@ import { Bot, MessagesSquare, User } from "lucide-react";
 export function AppLogoIcon() {
   return (
     <span className="flex items-center gap-1 text-orange-400">
-      <Bot className="h-[18px] w-[18px]" strokeWidth={1.75} />
-      <MessagesSquare className="h-[18px] w-[18px] -translate-y-[3px]" strokeWidth={1.75} />
-      <User className="h-[18px] w-[18px]" strokeWidth={1.75} />
+      <Bot className="h-5.5 w-5.5" strokeWidth={1.75} />
+      <MessagesSquare className="h-5.5 w-5.5 -translate-y-1" strokeWidth={1.75} />
+      <User className="h-5.5 w-5.5" strokeWidth={1.75} />
     </span>
   );
 }
