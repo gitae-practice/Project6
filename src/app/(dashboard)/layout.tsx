@@ -1,7 +1,6 @@
 import { AuthForm } from "@/components/AuthForm";
-import { LogoutButton } from "@/components/LogoutButton";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { HistorySidebar, type HistorySidebarItem } from "@/components/HistorySidebar";
+import { DashboardChrome } from "@/components/DashboardChrome";
+import { type HistorySidebarItem } from "@/components/HistorySidebar";
 import { createClient } from "@/lib/supabase/server";
 
 // interview_reports는 session_id가 unique라 1:1 관계지만, PostgREST 임베드는
@@ -41,19 +40,5 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     })
     .filter((item): item is HistorySidebarItem => item !== null);
 
-  return (
-    <div className="flex h-dvh flex-col bg-background">
-      <div className="flex flex-1 overflow-hidden">
-        <HistorySidebar items={sidebarItems} />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* 로고는 사이드바에 이미 있으므로 헤더는 우측 아이콘 버튼만 담는 얇은 바로 둔다 */}
-          <header className="flex items-center justify-end gap-1 border-b border-border px-4 py-2">
-            <LogoutButton />
-            <ThemeToggle />
-          </header>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
+  return <DashboardChrome items={sidebarItems}>{children}</DashboardChrome>;
 }

@@ -297,15 +297,15 @@ export function InterviewChat() {
 
   if (!started) {
     return (
-      <div className="flex flex-1 flex-col items-center gap-8 overflow-y-auto px-6 py-12 text-center">
+      <div className="flex flex-1 flex-col items-center gap-6 overflow-y-auto px-4 py-8 text-center md:gap-8 md:px-6 md:py-12">
         <div className="flex flex-col items-center gap-3">
-          <h1 className="max-w-md bg-linear-to-r from-orange-400 to-amber-300 bg-clip-text text-5xl font-bold tracking-tight text-transparent">
+          <h1 className="max-w-md bg-linear-to-r from-orange-400 to-amber-300 bg-clip-text text-3xl font-bold tracking-tight text-transparent md:text-4xl lg:text-5xl">
             오늘의 면접관
           </h1>
-          <p className="max-w-sm text-base text-muted">기술을 묻고, 사람을 보고, 압박을 견딘다.</p>
+          <p className="max-w-sm text-sm text-muted md:text-base">기술을 묻고, 사람을 보고, 압박을 견딘다.</p>
         </div>
 
-        {/* 면접관 3인 미리보기 — 순차 fade-in으로 등장 */}
+        {/* 면접관 3인 미리보기 — 순차 fade-in으로 등장. 모바일에서는 아이콘+텍스트를 가로로, md 이상에서는 세로로 배치 */}
         <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
           {INTERVIEWER_ORDER.map((role, i) => {
             const Icon = INTERVIEWER_ICON[role];
@@ -314,20 +314,22 @@ export function InterviewChat() {
               <div
                 key={role}
                 style={{ animationDelay: `${i * 100}ms` }}
-                className={`glass-card animate-fade-in-up flex flex-col items-center gap-2 rounded-xl p-5 transition-all duration-200 hover:scale-[1.02] ${accent.hoverBorder} ${accent.hoverGlow}`}
+                className={`glass-card animate-fade-in-up flex flex-row items-center gap-3 rounded-xl p-4 text-left transition-all duration-200 hover:scale-[1.02] md:flex-col md:items-center md:gap-2 md:p-5 md:text-center ${accent.hoverBorder} ${accent.hoverGlow}`}
               >
-                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${accent.softBg}`}>
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${accent.softBg}`}>
                   <Icon className={`h-5 w-5 ${accent.text}`} />
                 </span>
-                <p className="text-sm font-semibold">{INTERVIEWER_META[role].label}</p>
-                <p className="text-xs leading-relaxed text-muted">{INTERVIEWER_META[role].description}</p>
+                <div className="md:contents">
+                  <p className="text-sm font-semibold">{INTERVIEWER_META[role].label}</p>
+                  <p className="text-xs leading-relaxed text-muted">{INTERVIEWER_META[role].description}</p>
+                </div>
               </div>
             );
           })}
         </div>
 
         {/* 지원 직무/이력서 요약 — 입력하면 첫 질문에 반영됨, 둘 다 선택 사항 */}
-        <div className="glass-card flex w-full max-w-sm flex-col gap-3 rounded-xl p-5 text-left">
+        <div className="glass-card flex w-full max-w-2xl flex-col gap-3 rounded-xl p-4 text-left md:p-5">
           <div className="flex flex-col gap-1">
             <label htmlFor="jobRole" className="text-xs font-medium text-muted">
               지원 직무 (선택)
@@ -392,7 +394,7 @@ export function InterviewChat() {
           type="button"
           onClick={handleStart}
           disabled={isExtractingResume}
-          className="rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          className="w-full max-w-sm rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 md:w-auto"
         >
           {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
         </button>
@@ -402,7 +404,7 @@ export function InterviewChat() {
 
   if (finished) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-10 text-center">
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center gap-6 overflow-y-auto px-4 py-8 text-center md:px-6 md:py-10">
         <p className="text-2xl font-bold">면접 종료</p>
         <p className="text-muted">세 사람과의 대화를 모두 마쳤습니다. 수고하셨습니다.</p>
 
@@ -435,8 +437,9 @@ export function InterviewChat() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* 진행 상태 표시: 스텝 프로그레스 바 — 완료/현재/대기 상태를 원과 연결선으로 표현 */}
-      <div className="flex items-center justify-center border-b border-border px-4 py-5">
+      {/* 진행 상태 표시: 스텝 프로그레스 바 — 완료/현재/대기 상태를 원과 연결선으로 표현
+          모바일에서는 라벨 텍스트를 숨기고 아이콘 + 순번만 보여준다 */}
+      <div className="flex items-center justify-center border-b border-border px-2 py-4 md:px-4 md:py-5">
         {INTERVIEWER_ORDER.map((role, i) => {
           const Icon = INTERVIEWER_ICON[role];
           const accent = INTERVIEWER_ACCENT[role];
@@ -456,8 +459,17 @@ export function InterviewChat() {
                 >
                   {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </span>
+                {/* 모바일: 순번만 표시 */}
                 <span
-                  className={`text-xs whitespace-nowrap ${
+                  className={`text-xs font-semibold md:hidden ${
+                    current ? accent.text : done ? "text-muted" : "text-neutral-600"
+                  }`}
+                >
+                  {i + 1}
+                </span>
+                {/* md 이상: 전체 라벨 표시 */}
+                <span
+                  className={`hidden text-xs whitespace-nowrap md:inline ${
                     current ? `font-semibold ${accent.text}` : done ? "text-muted" : "text-neutral-600"
                   }`}
                 >
@@ -466,7 +478,7 @@ export function InterviewChat() {
               </div>
               {i < INTERVIEWER_ORDER.length - 1 && (
                 <span
-                  className={`mx-2 mb-5 w-8 border-t-2 sm:w-16 ${
+                  className={`mx-1.5 mb-5 w-5 border-t-2 sm:w-8 md:mx-2 md:w-16 ${
                     i < interviewerIndex ? `${accent.border} border-solid` : "border-dashed border-border"
                   }`}
                 />
@@ -477,7 +489,7 @@ export function InterviewChat() {
       </div>
 
       {/* 현재 대화 중인 면접관 프로필 헤더 — 역할별 포인트 컬러로 은은한 광원 효과를 얹는다 */}
-      <div className={`role-glow-${currentRole} flex items-center gap-3 border-b border-border px-4 py-3`}>
+      <div className={`role-glow-${currentRole} flex items-center gap-3 border-b border-border px-3 py-3 md:px-4`}>
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-surface ${currentAccent.softBorder} ${currentAccent.glow}`}
         >
@@ -490,7 +502,7 @@ export function InterviewChat() {
       </div>
 
       {/* 대화 목록 */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 md:px-4 md:py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {currentMessages
             .filter((m, i) => !(i === 0 && m.content.startsWith("면접을 시작해주세요"))) // 트리거 메시지는 화면에서 숨김
@@ -522,7 +534,7 @@ export function InterviewChat() {
 
       {/* 다음 면접관으로 넘어가기 (스트리밍이 끝난 뒤에만 노출) — hover 시 다음 면접관의 포인트 컬러로 채워진다 */}
       {!isStreaming && currentMessages.length > 1 && (
-        <div className="flex justify-center border-t border-border px-4 py-3">
+        <div className="flex justify-center border-t border-border px-3 py-3 md:px-4">
           {(() => {
             const isLast = interviewerIndex + 1 >= INTERVIEWER_ORDER.length;
             const nextAccent = isLast ? null : INTERVIEWER_ACCENT[INTERVIEWER_ORDER[interviewerIndex + 1]];
@@ -546,14 +558,14 @@ export function InterviewChat() {
       )}
 
       {/* 답변 입력창 — 화면 하단에 고정되는 느낌을 주는 프로스티드 바 */}
-      <form onSubmit={handleSubmit} className="border-t border-border bg-surface/80 p-4 backdrop-blur">
+      <form onSubmit={handleSubmit} className="border-t border-border bg-surface/80 p-3 backdrop-blur md:p-4">
         <div className="mx-auto flex max-w-2xl items-end gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="답변을 입력하세요..."
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
+            className="min-w-0 flex-1 resize-none rounded-xl border border-border bg-white/6 px-3 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20 md:px-4"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

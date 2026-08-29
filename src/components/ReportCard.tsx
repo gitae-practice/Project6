@@ -44,9 +44,9 @@ export function ReportCard({ report }: { report: InterviewReport }) {
   const { text: scoreTextColor } = scoreColor(report.overall_score);
 
   return (
-    <div className="grid w-full grid-cols-1 gap-4 text-left sm:grid-cols-6">
+    <div className="grid w-full grid-cols-1 gap-4 text-left md:grid-cols-6">
       {/* 종합 점수 카드 */}
-      <div className="glass-card flex flex-col items-center justify-center gap-1 rounded-xl p-6 sm:col-span-2">
+      <div className="glass-card flex flex-col items-center justify-center gap-1 rounded-xl p-4 md:col-span-2 md:p-6">
         <div className="relative flex items-center justify-center">
           <ScoreRing score={report.overall_score} />
           <span className={`absolute text-4xl font-black ${scoreTextColor}`}>
@@ -57,7 +57,7 @@ export function ReportCard({ report }: { report: InterviewReport }) {
       </div>
 
       {/* 총평 카드 */}
-      <div className="glass-card flex flex-col justify-center gap-2 rounded-xl p-6 sm:col-span-4">
+      <div className="glass-card flex flex-col justify-center gap-2 rounded-xl p-4 md:col-span-4 md:p-6">
         <p className="text-sm font-medium text-muted">총평</p>
         <p className="leading-relaxed">{report.summary}</p>
       </div>
@@ -69,7 +69,7 @@ export function ReportCard({ report }: { report: InterviewReport }) {
         return (
           <div
             key={role}
-            className={`glass-card flex flex-col gap-2 rounded-xl border-t-2 p-5 sm:col-span-2 ${accent.border}`}
+            className={`glass-card flex flex-col gap-2 rounded-xl border-t-2 p-4 md:col-span-2 md:p-5 ${accent.border}`}
           >
             <div className="flex items-center gap-2">
               <Icon className={`h-4 w-4 ${accent.text}`} />
@@ -81,7 +81,7 @@ export function ReportCard({ report }: { report: InterviewReport }) {
       })}
 
       {/* 강점 */}
-      <div className="glass-card flex flex-col gap-3 rounded-xl p-5 sm:col-span-3">
+      <div className="glass-card flex flex-col gap-3 rounded-xl p-4 md:col-span-3 md:p-5">
         <div className="flex items-center gap-2 text-green-400">
           <TrendingUp className="h-4 w-4" />
           <p className="text-xs font-medium">강점</p>
@@ -97,7 +97,7 @@ export function ReportCard({ report }: { report: InterviewReport }) {
       </div>
 
       {/* 보완할 점 */}
-      <div className="glass-card flex flex-col gap-3 rounded-xl p-5 sm:col-span-3">
+      <div className="glass-card flex flex-col gap-3 rounded-xl p-4 md:col-span-3 md:p-5">
         <div className="flex items-center gap-2 text-orange-400">
           <AlertTriangle className="h-4 w-4" />
           <p className="text-xs font-medium">보완할 점</p>

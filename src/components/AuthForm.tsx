@@ -58,9 +58,9 @@ export function AuthForm() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background sm:flex-row">
+    <div className="flex min-h-dvh flex-col bg-background md:flex-row">
       {/* 좌측: 브랜딩 패널 — 작은 화면에서는 숨기고 폼만 보여준다 */}
-      <div className="dot-grid relative hidden flex-1 flex-col justify-between overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.15),transparent_55%)] p-10 sm:flex">
+      <div className="dot-grid relative hidden flex-1 flex-col justify-between overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(249,115,22,0.15),transparent_55%)] p-10 md:flex">
         <div className="flex items-center gap-2">
           <BrainCircuit className="h-9 w-9 text-accent" />
           <span className="text-lg font-semibold">오늘의 면접관</span>
@@ -86,7 +86,7 @@ export function AuthForm() {
 
       {/* 우측: 로그인/회원가입 폼 */}
       <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-surface px-6 py-12">
-        <div className="flex w-full max-w-sm flex-col gap-1 sm:hidden">
+        <div className="flex w-full max-w-sm flex-col gap-1 md:hidden">
           <div className="mb-4 flex items-center justify-center gap-2">
             <BrainCircuit className="h-7 w-7 text-accent" />
             <span className="font-semibold">오늘의 면접관</span>
