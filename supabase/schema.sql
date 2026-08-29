@@ -28,8 +28,21 @@ create table if not exists interview_messages (
 create index if not exists interview_messages_session_id_idx
   on interview_messages (session_id);
 
+-- 면접 종료 후 생성되는 종합 평가 리포트. 세션 하나당 리포트 하나(1:1)라 session_id를 unique로 둔다.
+create table if not exists interview_reports (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null unique references interview_sessions(id) on delete cascade,
+  overall_score numeric not null,
+  summary text not null,
+  interviewer_feedback jsonb not null, -- { technical, personality, pressure } 각각 문자열
+  strengths text[] not null,
+  improvements text[] not null,
+  created_at timestamptz not null default now()
+);
+
 alter table interview_sessions enable row level security;
 alter table interview_messages enable row level security;
+alter table interview_reports enable row level security;
 
 -- 로그인 붙이기 전 임시로 썼던 전체 허용 정책 — 있으면 지운다 (재실행 안전하게)
 drop policy if exists "temp_allow_all_sessions" on interview_sessions;
@@ -73,9 +86,37 @@ create policy "insert_own_messages" on interview_messages
     )
   );
 
+-- 리포트도 메시지와 같은 방식으로 소유권을 확인한다 (session_id를 통해).
+-- update까지 포함해야 재시도(같은 세션에 다시 upsert) 시 막히지 않는다.
+drop policy if exists "select_own_reports" on interview_reports;
+drop policy if exists "upsert_own_reports" on interview_reports;
+
+create policy "select_own_reports" on interview_reports
+  for select using (
+    exists (
+      select 1 from interview_sessions s
+      where s.id = interview_reports.session_id and s.user_id = auth.uid()
+    )
+  );
+
+create policy "upsert_own_reports" on interview_reports
+  for all using (
+    exists (
+      select 1 from interview_sessions s
+      where s.id = interview_reports.session_id and s.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from interview_sessions s
+      where s.id = interview_reports.session_id and s.user_id = auth.uid()
+    )
+  );
+
 -- "Automatically expose new tables"를 꺼둔 상태라 RLS 정책과 별개로
 -- 테이블 자체 접근 권한(GRANT)을 직접 줘야 PostgREST가 응답한다.
 -- anon(비로그인)은 이제 필요 없지만, 혹시 남겨둔 다른 용도가 있을까봐 authenticated만 명시적으로 부여.
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on interview_sessions to authenticated;
 grant select, insert, update, delete on interview_messages to authenticated;
+grant select, insert, update, delete on interview_reports to authenticated;

@@ -39,7 +39,10 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { history } = (await request.json()) as { history: HistoryByRole };
+  const { sessionId, history } = (await request.json()) as {
+    sessionId: string | null;
+    history: HistoryByRole;
+  };
 
   const transcript = buildTranscript(history);
 
@@ -56,5 +59,23 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "리포트 생성에 실패했습니다. 다시 시도해주세요." }, { status: 502 });
   }
 
-  return Response.json(response.parsed_output);
+  const report = response.parsed_output;
+
+  // 나중에 "지난 면접 기록"에서 다시 볼 수 있도록 세션에 연결해 저장한다.
+  // 재시도(사용자가 "다시 시도" 눌렀을 때) 시 같은 세션에 덮어써야 하므로 upsert.
+  if (sessionId) {
+    await supabase.from("interview_reports").upsert(
+      {
+        session_id: sessionId,
+        overall_score: report.overall_score,
+        summary: report.summary,
+        interviewer_feedback: report.interviewer_feedback,
+        strengths: report.strengths,
+        improvements: report.improvements,
+      },
+      { onConflict: "session_id" }
+    );
+  }
+
+  return Response.json(report);
 }

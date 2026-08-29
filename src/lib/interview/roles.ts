@@ -2,6 +2,8 @@
 // 세 명의 면접관이 정해진 순서(INTERVIEWER_ORDER)대로 등장하며,
 // 각자 다른 system prompt로 Claude를 호출해 성격이 다른 질문을 던진다.
 
+import { Code2, Heart, Zap, type LucideIcon } from "lucide-react";
+
 export type InterviewerRole = "technical" | "personality" | "pressure";
 
 export interface InterviewerMeta {
@@ -32,6 +34,67 @@ export const INTERVIEWER_META: Record<InterviewerRole, InterviewerMeta> = {
     role: "pressure",
     label: "압박 면접관",
     description: "답변의 허점을 파고드는 후속 질문을 던집니다",
+  },
+};
+
+// 역할별 아이콘 — 화면 전체(홈 미리보기 카드/진행 상태 표시/채팅 아바타/리포트)에서 공통으로 쓴다.
+export const INTERVIEWER_ICON: Record<InterviewerRole, LucideIcon> = {
+  technical: Code2,
+  personality: Heart,
+  pressure: Zap,
+};
+
+// 역할별 포인트 컬러 — 기술=blue, 인성=green, 압박=red로 구분해 어느 면접관인지 한눈에 보이게 한다.
+// className 조각을 미리 묶어두어 각 컴포넌트에서 중복 정의하지 않고 재사용한다.
+// 주의: Tailwind는 소스 코드에 "글자 그대로" 등장하는 클래스만 CSS로 생성한다.
+// `hover:${accent.bg}`처럼 접두사와 변수를 런타임에 이어붙이면 완성된 문자열이
+// 어떤 파일에도 그대로 존재하지 않아 스타일이 아예 만들어지지 않는다.
+// 그래서 hover: 같은 variant가 붙는 조합은 아래처럼 완성된 문자열을 미리 다 적어둔다.
+export interface InterviewerAccent {
+  text: string; // 아이콘/포인트 텍스트 색
+  border: string; // 진한 테두리 (강조용)
+  bg: string; // 채워진 배경 (완료 표시 등)
+  softBorder: string; // 옅은 테두리 (hover 등)
+  softBg: string; // 옅은 배경
+  glow: string; // 은은한 글로우 그림자
+  hoverBg: string; // hover 시 배경을 해당 색으로 채움 ("다음 면접관으로" 버튼 등)
+  hoverBorder: string; // hover 시 옅은 테두리로 강조 (미리보기 카드 등)
+  hoverGlow: string; // hover 시 은은한 글로우 그림자
+}
+
+export const INTERVIEWER_ACCENT: Record<InterviewerRole, InterviewerAccent> = {
+  technical: {
+    text: "text-blue-400",
+    border: "border-blue-400",
+    bg: "bg-blue-400",
+    softBorder: "border-blue-400/30",
+    softBg: "bg-blue-400/10",
+    glow: "shadow-[0_0_20px_rgba(96,165,250,0.3)]",
+    hoverBg: "hover:bg-blue-400",
+    hoverBorder: "hover:border-blue-400/30",
+    hoverGlow: "hover:shadow-[0_0_20px_rgba(96,165,250,0.1)]",
+  },
+  personality: {
+    text: "text-green-400",
+    border: "border-green-400",
+    bg: "bg-green-400",
+    softBorder: "border-green-400/30",
+    softBg: "bg-green-400/10",
+    glow: "shadow-[0_0_20px_rgba(74,222,128,0.3)]",
+    hoverBg: "hover:bg-green-400",
+    hoverBorder: "hover:border-green-400/30",
+    hoverGlow: "hover:shadow-[0_0_20px_rgba(74,222,128,0.1)]",
+  },
+  pressure: {
+    text: "text-red-400",
+    border: "border-red-400",
+    bg: "bg-red-400",
+    softBorder: "border-red-400/30",
+    softBg: "bg-red-400/10",
+    glow: "shadow-[0_0_20px_rgba(248,113,113,0.3)]",
+    hoverBg: "hover:bg-red-400",
+    hoverBorder: "hover:border-red-400/30",
+    hoverGlow: "hover:shadow-[0_0_20px_rgba(248,113,113,0.1)]",
   },
 };
 

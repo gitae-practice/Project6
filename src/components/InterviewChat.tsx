@@ -1,20 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserRoundCog, UserRoundCheck, UserRoundSearch, type LucideIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Send, Home, Check } from "lucide-react";
 import {
   INTERVIEWER_ORDER,
   INTERVIEWER_META,
+  INTERVIEWER_ICON,
+  INTERVIEWER_ACCENT,
   type InterviewerRole,
 } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
-
-// 면접관마다 다른 사람 아이콘을 부여한다 (톱니바퀴=기술, 체크=인성, 돋보기=압박/파고듦).
-const INTERVIEWER_ICON: Record<InterviewerRole, LucideIcon> = {
-  technical: UserRoundCog,
-  personality: UserRoundCheck,
-  pressure: UserRoundSearch,
-};
+import { ReportCard } from "@/components/ReportCard";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -32,6 +29,7 @@ const EMPTY_HISTORY: HistoryByRole = {
 };
 
 export function InterviewChat() {
+  const router = useRouter();
   const [started, setStarted] = useState(false);
   const [interviewerIndex, setInterviewerIndex] = useState(0);
   const [history, setHistory] = useState<HistoryByRole>(EMPTY_HISTORY);
@@ -52,6 +50,7 @@ export function InterviewChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentRole = INTERVIEWER_ORDER[interviewerIndex];
   const CurrentIcon = INTERVIEWER_ICON[currentRole];
+  const currentAccent = INTERVIEWER_ACCENT[currentRole];
   const currentMessages = history[currentRole];
 
   // 수기 입력 + PDF에서 추출한 내용을 합쳐서 면접관에게 넘긴다. 둘 다 선택 사항이라 둘 다 비어있을 수도 있다.
@@ -275,6 +274,8 @@ export function InterviewChat() {
 
   // 세 면접관과의 전체 대화(history)를 Claude에게 보내 종합 평가 리포트를 받아온다.
   // "면접 마치기" 클릭 시점(handleNextInterviewer)에서 직접 호출한다.
+  // 서버가 sessionId 기준으로 DB에 리포트를 저장하므로, 저장이 끝나면 router.refresh()로
+  // 좌측 사이드바(서버 컴포넌트)가 새 기록을 바로 반영하도록 한다.
   async function generateReport() {
     setIsGeneratingReport(true);
     setReportError(null);
@@ -282,10 +283,11 @@ export function InterviewChat() {
       const response = await fetch("/api/interview/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history }),
+        body: JSON.stringify({ sessionId, history }),
       });
       if (!response.ok) throw new Error("리포트 요청 실패");
       setReport((await response.json()) as InterviewReport);
+      router.refresh();
     } catch {
       setReportError("리포트를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -295,16 +297,37 @@ export function InterviewChat() {
 
   if (!started) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
-        <h1 className="max-w-md text-3xl font-bold leading-snug sm:text-4xl">
-          오늘의 면접관
-        </h1>
-        <p className="max-w-sm text-muted">
-          기술을 묻고, 사람을 보고, 압박을 견딘다.
-        </p>
+      <div className="flex flex-1 flex-col items-center gap-8 overflow-y-auto px-6 py-12 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <h1 className="max-w-md bg-linear-to-r from-orange-400 to-amber-300 bg-clip-text text-5xl font-bold tracking-tight text-transparent">
+            오늘의 면접관
+          </h1>
+          <p className="max-w-sm text-base text-muted">기술을 묻고, 사람을 보고, 압박을 견딘다.</p>
+        </div>
+
+        {/* 면접관 3인 미리보기 — 순차 fade-in으로 등장 */}
+        <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+          {INTERVIEWER_ORDER.map((role, i) => {
+            const Icon = INTERVIEWER_ICON[role];
+            const accent = INTERVIEWER_ACCENT[role];
+            return (
+              <div
+                key={role}
+                style={{ animationDelay: `${i * 100}ms` }}
+                className={`glass-card animate-fade-in-up flex flex-col items-center gap-2 rounded-xl p-5 transition-all duration-200 hover:scale-[1.02] ${accent.hoverBorder} ${accent.hoverGlow}`}
+              >
+                <span className={`flex h-10 w-10 items-center justify-center rounded-full ${accent.softBg}`}>
+                  <Icon className={`h-5 w-5 ${accent.text}`} />
+                </span>
+                <p className="text-sm font-semibold">{INTERVIEWER_META[role].label}</p>
+                <p className="text-xs leading-relaxed text-muted">{INTERVIEWER_META[role].description}</p>
+              </div>
+            );
+          })}
+        </div>
 
         {/* 지원 직무/이력서 요약 — 입력하면 첫 질문에 반영됨, 둘 다 선택 사항 */}
-        <div className="flex w-full max-w-sm flex-col gap-3 text-left">
+        <div className="glass-card flex w-full max-w-sm flex-col gap-3 rounded-xl p-5 text-left">
           <div className="flex flex-col gap-1">
             <label htmlFor="jobRole" className="text-xs font-medium text-muted">
               지원 직무 (선택)
@@ -315,7 +338,7 @@ export function InterviewChat() {
               value={jobRole}
               onChange={(e) => setJobRole(e.target.value)}
               placeholder="예: 프론트엔드 개발자"
-              className="rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
+              className="rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -324,7 +347,7 @@ export function InterviewChat() {
             </label>
 
             {/* PDF 업로드 — 텍스트박스와는 별개. 내용을 화면에 보여주지 않고 면접관이 "기억"만 하게 한다. */}
-            <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5">
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5">
               <span className="flex-1 truncate text-xs text-muted">
                 {isExtractingResume
                   ? "PDF를 읽고 있습니다..."
@@ -334,10 +357,10 @@ export function InterviewChat() {
               </span>
               <label
                 htmlFor="resumeFile"
-                className={`shrink-0 cursor-pointer rounded-lg border border-border px-3 py-1 text-xs transition-colors ${
+                className={`shrink-0 cursor-pointer rounded-lg border px-3 py-1 text-xs transition-colors ${
                   isExtractingResume
-                    ? "cursor-not-allowed text-muted"
-                    : "text-accent hover:border-accent"
+                    ? "cursor-not-allowed border-border text-muted"
+                    : "border-accent/40 text-accent hover:bg-accent/10"
                 }`}
               >
                 PDF 선택
@@ -351,7 +374,7 @@ export function InterviewChat() {
                 className="hidden"
               />
             </div>
-            {resumeUploadError && <p className="text-xs text-red-600">{resumeUploadError}</p>}
+            {resumeUploadError && <p className="text-xs text-red-500">{resumeUploadError}</p>}
 
             {/* 직접 입력 — PDF 업로드와 무관하게 순수 수기 입력용 */}
             <textarea
@@ -360,7 +383,7 @@ export function InterviewChat() {
               onChange={(e) => setResumeContent(e.target.value)}
               rows={4}
               placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적어주세요 (선택)"
-              className="resize-none rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
+              className="resize-none rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
           </div>
         </div>
@@ -369,7 +392,7 @@ export function InterviewChat() {
           type="button"
           onClick={handleStart}
           disabled={isExtractingResume}
-          className="rounded-xl bg-accent px-6 py-3 font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
         >
           {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
         </button>
@@ -386,7 +409,7 @@ export function InterviewChat() {
         {isGeneratingReport && <p className="text-sm text-muted">평가 리포트를 만드는 중...</p>}
         {reportError && (
           <div className="flex flex-col items-center gap-2">
-            <p className="text-sm text-red-600">{reportError}</p>
+            <p className="text-sm text-red-500">{reportError}</p>
             <button
               type="button"
               onClick={() => void generateReport()}
@@ -397,90 +420,68 @@ export function InterviewChat() {
           </div>
         )}
 
-        {report && (
-          <div className="w-full rounded-xl border border-border bg-surface p-6 text-left">
-            <div className="mb-4 flex items-baseline justify-between">
-              <p className="font-medium">종합 점수</p>
-              <p className="text-3xl font-bold text-accent">{report.overall_score.toFixed(1)} / 10</p>
-            </div>
-            <p className="mb-6 text-sm leading-relaxed">{report.summary}</p>
-
-            <div className="mb-6 flex flex-col gap-3">
-              {INTERVIEWER_ORDER.map((role) => {
-                const Icon = INTERVIEWER_ICON[role];
-                return (
-                  <div key={role} className="flex items-start gap-2">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-background">
-                      <Icon className="h-3.5 w-3.5 text-accent" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-medium text-muted">{INTERVIEWER_META[role].label}</p>
-                      <p className="text-sm leading-relaxed">{report.interviewer_feedback[role]}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted">강점</p>
-                <ul className="list-inside list-disc space-y-1 text-sm">
-                  {report.strengths.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted">보완할 점</p>
-                <ul className="list-inside list-disc space-y-1 text-sm">
-                  {report.improvements.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
+        {report && <ReportCard report={report} />}
 
         <button
           type="button"
           onClick={handleRestart}
-          className="rounded-xl border border-border px-5 py-2.5 text-sm transition-colors hover:border-accent hover:text-accent"
+          className="flex items-center gap-2 rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02]"
         >
-          홈으로 돌아가기
+          <Home className="h-4 w-4" /> 홈으로 돌아가기
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      {/* 진행 상태 표시: 현재 어느 면접관 차례인지 */}
-      <div className="flex justify-center gap-2 border-b border-border px-4 py-3">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* 진행 상태 표시: 스텝 프로그레스 바 — 완료/현재/대기 상태를 원과 연결선으로 표현 */}
+      <div className="flex items-center justify-center border-b border-border px-4 py-5">
         {INTERVIEWER_ORDER.map((role, i) => {
           const Icon = INTERVIEWER_ICON[role];
+          const accent = INTERVIEWER_ACCENT[role];
+          const done = i < interviewerIndex;
+          const current = i === interviewerIndex;
           return (
-            <span
-              key={role}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
-                i === interviewerIndex
-                  ? "bg-accent text-accent-foreground"
-                  : i < interviewerIndex
-                    ? "bg-border text-muted"
-                    : "text-muted"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" /> {INTERVIEWER_META[role].label}
-            </span>
+            <div key={role} className="flex items-center">
+              <div className="flex flex-col items-center gap-1.5">
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                    done
+                      ? `${accent.border} ${accent.bg} text-white`
+                      : current
+                        ? `${accent.border} bg-transparent ${accent.text}`
+                        : "border-neutral-600 text-neutral-600"
+                  }`}
+                >
+                  {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                </span>
+                <span
+                  className={`text-xs whitespace-nowrap ${
+                    current ? `font-semibold ${accent.text}` : done ? "text-muted" : "text-neutral-600"
+                  }`}
+                >
+                  {INTERVIEWER_META[role].label}
+                </span>
+              </div>
+              {i < INTERVIEWER_ORDER.length - 1 && (
+                <span
+                  className={`mx-2 mb-5 w-8 border-t-2 sm:w-16 ${
+                    i < interviewerIndex ? `${accent.border} border-solid` : "border-dashed border-border"
+                  }`}
+                />
+              )}
+            </div>
           );
         })}
       </div>
 
-      {/* 현재 대화 중인 면접관 프로필 헤더 */}
-      <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background">
-          <CurrentIcon className="h-5 w-5 text-accent" />
+      {/* 현재 대화 중인 면접관 프로필 헤더 — 역할별 포인트 컬러로 은은한 광원 효과를 얹는다 */}
+      <div className={`role-glow-${currentRole} flex items-center gap-3 border-b border-border px-4 py-3`}>
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-surface ${currentAccent.softBorder} ${currentAccent.glow}`}
+        >
+          <CurrentIcon className={`h-5 w-5 ${currentAccent.text}`} />
         </span>
         <div className="min-w-0">
           <p className="font-medium">{INTERVIEWER_META[currentRole].label}</p>
@@ -497,23 +498,21 @@ export function InterviewChat() {
               message.role === "user" ? (
                 <div
                   key={i}
-                  className="max-w-[85%] self-end rounded-xl bg-accent px-4 py-3 leading-relaxed whitespace-pre-wrap text-accent-foreground"
+                  className="max-w-[85%] self-end rounded-xl border border-accent/20 bg-accent/10 px-4 py-3 leading-relaxed whitespace-pre-wrap"
                 >
                   {message.content}
                 </div>
               ) : (
-                <div key={i} className="flex max-w-[85%] items-start gap-2 self-start">
-                  {/* 면접관 아바타 — 역할별 사람 아이콘으로 구분 (기술=톱니, 인성=체크, 압박=돋보기) */}
-                  <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
-                    <CurrentIcon className="h-4 w-4 text-accent" />
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted">
-                      {INTERVIEWER_META[currentRole].label}
+                <div key={i} className="flex max-w-[85%] flex-col gap-1 self-start">
+                  {/* 면접관 아바타 + 이름 레이블 — 역할별 아이콘/포인트 컬러로 구분 */}
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full ${currentAccent.softBg}`}>
+                      <CurrentIcon className={`h-3 w-3 ${currentAccent.text}`} />
                     </span>
-                    <div className="rounded-xl border border-border bg-surface px-4 py-3 leading-relaxed whitespace-pre-wrap">
-                      {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
-                    </div>
+                    {INTERVIEWER_META[currentRole].label}
+                  </span>
+                  <div className="glass-card rounded-xl px-4 py-3 leading-relaxed whitespace-pre-wrap">
+                    {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
                   </div>
                 </div>
               )
@@ -521,30 +520,40 @@ export function InterviewChat() {
         </div>
       </div>
 
-      {/* 다음 면접관으로 넘어가기 (스트리밍이 끝난 뒤에만 노출) */}
+      {/* 다음 면접관으로 넘어가기 (스트리밍이 끝난 뒤에만 노출) — hover 시 다음 면접관의 포인트 컬러로 채워진다 */}
       {!isStreaming && currentMessages.length > 1 && (
-        <div className="flex justify-center border-t border-border px-4 py-2">
-          <button
-            type="button"
-            onClick={handleNextInterviewer}
-            className="rounded-lg border border-border px-4 py-1.5 text-sm text-muted transition-colors hover:border-accent hover:text-accent"
-          >
-            {interviewerIndex + 1 >= INTERVIEWER_ORDER.length
-              ? "면접 마치기"
-              : `다음 면접관(${INTERVIEWER_META[INTERVIEWER_ORDER[interviewerIndex + 1]].label})으로`}
-          </button>
+        <div className="flex justify-center border-t border-border px-4 py-3">
+          {(() => {
+            const isLast = interviewerIndex + 1 >= INTERVIEWER_ORDER.length;
+            const nextAccent = isLast ? null : INTERVIEWER_ACCENT[INTERVIEWER_ORDER[interviewerIndex + 1]];
+            return (
+              <button
+                type="button"
+                onClick={handleNextInterviewer}
+                className={`rounded-xl border px-5 py-2 text-sm font-medium transition-colors ${
+                  nextAccent
+                    ? `${nextAccent.softBorder} ${nextAccent.text} ${nextAccent.hoverBg} hover:border-transparent hover:text-white`
+                    : "border-accent/40 text-accent hover:bg-accent hover:text-white"
+                }`}
+              >
+                {isLast
+                  ? "면접 마치기"
+                  : `다음 면접관(${INTERVIEWER_META[INTERVIEWER_ORDER[interviewerIndex + 1]].label})으로`}
+              </button>
+            );
+          })()}
         </div>
       )}
 
-      {/* 답변 입력창 */}
-      <form onSubmit={handleSubmit} className="border-t border-border p-4">
-        <div className="mx-auto flex max-w-2xl gap-2">
+      {/* 답변 입력창 — 화면 하단에 고정되는 느낌을 주는 프로스티드 바 */}
+      <form onSubmit={handleSubmit} className="border-t border-border bg-surface/80 p-4 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-end gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="답변을 입력하세요..."
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-border bg-surface px-4 py-2 outline-none focus:border-accent"
+            className="flex-1 resize-none rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -555,9 +564,10 @@ export function InterviewChat() {
           <button
             type="submit"
             disabled={isStreaming || !input.trim()}
-            className="rounded-xl bg-accent px-5 py-2 font-medium text-accent-foreground transition-opacity disabled:opacity-40"
+            aria-label="답변 전송"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            전송
+            <Send className="h-4 w-4" />
           </button>
         </div>
       </form>

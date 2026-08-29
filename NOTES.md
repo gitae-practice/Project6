@@ -2,6 +2,25 @@
 
 ## 완료된 작업
 
+### 2026-08-29
+- **유저별 면접 히스토리 기능 완성**
+  - `interview_reports` 테이블 신규 추가 (session_id unique FK / overall_score / summary / interviewer_feedback jsonb / strengths / improvements), RLS+GRANT까지 schema.sql 반영
+  - `/api/interview/report`가 sessionId를 받아 생성한 리포트를 upsert로 저장하도록 수정
+  - 로그인 후 화면 전체가 `(dashboard)` 라우트 그룹으로 재구성: `layout.tsx`(인증 분기 + 좌측 사이드바 조회), `page.tsx`(새 면접), `history/[id]/page.tsx`(지난 기록 상세 — 리포트 카드 + 전체 대화)
+  - `HistorySidebar` — 로그인 직후부터 항상 왼쪽에 떠 있는 지난 기록 목록, 리포트 있는 세션만 노출
+  - PostgREST 임베드가 배열/단일객체 둘 다로 올 수 있어 `firstReport()` 헬퍼로 방어 처리
+  - tsc/lint/build 전부 통과 확인
+- **디자인 전면 리뉴얼** (기능 로직은 그대로, 스타일만 교체)
+  - 순수 중립 팔레트(라이트 #fafafa / 다크 #0a0a0a)로 변경, 오렌지(#f97316) 포인트 컬러로 통일
+  - 카드/패널 공통 glassmorphism 적용 (`globals.css`의 `.glass-card` — foreground 기준 color-mix라 라이트/다크 모두 자연스럽게 동작)
+  - 로그인 화면: 좌(브랜딩+면접관 3인 뱃지) / 우(폼) 2열 레이아웃으로 재구성
+  - 홈 화면: 그라데이션 타이틀 + 면접관 3인 미리보기 카드(기술=blue/인성=green/압박=red, 순차 fade-in)
+  - 면접 진행 화면: pill 3개 → 체크 아이콘이 채워지는 스텝 프로그레스 바, 면접관 헤더에 역할별 글로우, 하단 입력바 프로스티드 스티키 처리
+  - 리포트 화면: 단일 카드 → Bento grid(점수 링/총평/면접관별 피드백 3칸/강점·보완점)로 재구성, 점수 구간별(초록/주황/빨강) 색상 연동
+  - 역할별 아이콘/색상을 `roles.ts`의 `INTERVIEWER_ICON`/`INTERVIEWER_ACCENT`로 중앙화 (Tailwind가 소스에 리터럴로 없는 클래스는 생성 못 하는 문제 때문에 `hover:bg-blue-400` 같은 조합형 클래스도 전부 완성된 문자열로 미리 정의)
+  - Tailwind 사용 상태 점검: 인라인 style 전무, `globals.css` 하나로만 관리되는 것 확인 — 별도 정리 불필요
+  - 프로덕션 빌드 CSS에서 신규 클래스(`hover:bg-blue-400` 등) 실제 생성 여부까지 grep으로 검증
+
 ### 2026-08-26
 - Supabase Auth 로그인/회원가입 추가 (AuthForm, LogoutButton), page.tsx에서 서버 사이드로 로그인 분기
 - Next.js 16 대응: middleware.ts → proxy.ts로 전환 (파일명/함수명만 변경, 기능 동일) — 세션 쿠키 자동 갱신
@@ -52,15 +71,6 @@
 
 ## 다음 할 일
 
-- **유저별 면접 히스토리 (다음 세션 최우선)** — "지난 면접 때는 어땠는지" 돌아볼 수 있게
-  - `interview_reports` 테이블 신규: session_id(unique, FK) / overall_score / summary / interviewer_feedback(jsonb) / strengths(text[]) / improvements(text[]) / created_at
-  - RLS: session_id로 interview_sessions 소유권 확인하는 방식 (메시지 테이블과 동일 패턴)
-  - `/api/interview/report`가 sessionId도 받아서 생성한 리포트를 이 테이블에 upsert하도록 수정 (지금은 화면에 한 번 보여주고 버려짐)
-  - `InterviewChat.tsx`의 리포트 생성 호출부에서 `sessionId` 같이 전송하도록 수정
-  - `/history` 목록 페이지 — 로그인한 유저의 지난 세션들(날짜, 지원 직무, 점수) 나열
-  - `/history/[id]` 상세 페이지 — 리포트 카드 + 전체 대화 내역
-  - 헤더에 "지난 기록" 이동 링크 추가
-  - (2026-08-26에 한 번 만들었다가 오늘 안에 못 끝내서 원복함 — schema.sql은 현재 리포트 테이블 없는 상태)
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기

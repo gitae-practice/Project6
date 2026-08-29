@@ -4,23 +4,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #f7f3ec; /* 웜 오트밀 */
-  --foreground: #241f1a; /* 짙은 브라운 계열 텍스트 */
-  --surface: #ffffff; /* 카드 등 표면 */
-  --border: #e6ddcf;
-  --muted: #786b5c;
-  --accent: #c2542e; /* 테라코타 포인트 컬러 */
-  --accent-foreground: #fdf7f1;
+  --background: #fafafa; /* 순수 중립 라이트 (기존 갈색 계열 제거) */
+  --foreground: #18181b;
+  --surface: #ffffff; /* 사이드바/헤더 등 불투명 패널 */
+  --border: #e4e4e7;
+  --muted: #71717a;
+  --accent: #f97316; /* 오렌지 포인트 컬러로 통일 (라이트/다크 동일) */
+  --accent-foreground: #fff7ed;
 }
 
 .dark {
-  --background: #1c1815;
-  --foreground: #f2ece2;
-  --surface: #262019;
-  --border: #3a3128;
-  --muted: #b3a495;
-  --accent: #e0703f;
-  --accent-foreground: #1c1815;
+  --background: #0a0a0a; /* 순수 중립 다크 */
+  --foreground: #fafafa;
+  --surface: #111111;
+  --border: rgba(255, 255, 255, 0.08);
+  --muted: #a3a3a3;
+  --accent: #f97316;
+  --accent-foreground: #fff7ed;
 }
 
 @theme inline {
@@ -38,4 +38,53 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* 다크 모드에서는 상단 중앙에 은은한 오렌지 광원을 얹어 순수 검정이 밋밋해 보이지 않게 한다 */
+.dark body {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(249, 115, 22, 0.08) 0%, transparent 60%),
+    var(--background);
+}
+
+/* 카드/패널 공통 glassmorphism — 배경색(--foreground)을 아주 옅게 섞어 라이트/다크 모두에서
+   자연스러운 유리 질감이 나오게 한다 (다크: 흰색이 살짝 섞인 유리, 라이트: 검정이 살짝 섞인 유리) */
+.glass-card {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 로그인 화면 좌측 브랜딩 패널의 미세한 점 패턴 배경 */
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(249, 115, 22, 0.3) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* 면접 진행 화면 상단 — 현재 면접관의 포인트 컬러로 은은하게 물든 광원 효과 */
+.role-glow-technical {
+  background: radial-gradient(ellipse 60% 100% at 50% 0%, rgba(96, 165, 250, 0.12), transparent 70%);
+}
+.role-glow-personality {
+  background: radial-gradient(ellipse 60% 100% at 50% 0%, rgba(74, 222, 128, 0.12), transparent 70%);
+}
+.role-glow-pressure {
+  background: radial-gradient(ellipse 60% 100% at 50% 0%, rgba(248, 113, 113, 0.12), transparent 70%);
+}
+
+/* 카드 순차 등장 애니메이션 (홈 화면 면접관 미리보기 카드 등) */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
 }
