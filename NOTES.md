@@ -9,6 +9,19 @@
   - 라벨/힌트 텍스트를 "(선택)" → "(필수)"로 변경, PDF/텍스트 둘 중 하나만 있으면 된다는 안내 추가
   - `buildKickoffMessage()`는 이제 직무/이력서가 항상 존재한다고 가정하도록 단순화 (기존 "둘 다 없을 때" 분기 제거 — canStart가 막아주므로 도달 불가능해진 코드)
   - tsc/lint/build 전부 통과 확인
+- **히스토리 기록 삭제 기능**
+  - `HistorySidebar`의 각 항목 옆에 휴지통 버튼 추가, `window.confirm` 확인 후 `interview_sessions` 행 삭제
+  - 스키마에 이미 `on delete cascade`(메시지/리포트)와 `delete_own_sessions` RLS 정책, GRANT delete가 되어 있어서 스키마 변경 없이 프론트만 추가하면 됐음
+  - 보고 있던 기록을 삭제하면 홈으로 이동 + `router.refresh()`로 목록 즉시 갱신
+- **회원가입 시 실명 입력 → 면접관이 이름 참고**
+  - `AuthForm` 회원가입 모드에만 "이름" 입력란 추가, `supabase.auth.signUp`의 `options.data.full_name`(user_metadata)에 저장 — 별도 테이블/스키마 변경 없음
+  - `/api/interview` route에서 매 요청마다 `user.user_metadata.full_name`을 읽어 시스템 프롬프트에 "지원자의 이름은 OOO입니다" 문구로 주입
+- **로그인 화면 모바일 브랜딩 슬라이드**
+  - 브랜딩 패널을 `hidden md:flex`로 완전히 숨기던 것을 없애고, CSS `scroll-snap`만으로 모바일 2패널(브랜딩→폼) 스와이프 캐러셀 구현 (별도 제스처 라이브러리 없이 네이티브 터치 스크롤 사용)
+  - md 이상에서는 `md:snap-none md:overflow-visible`로 되돌려 기존 고정 2열 레이아웃 그대로 유지
+  - 모바일 브랜딩 슬라이드 하단에 "옆으로 밀어 로그인하기" 힌트 텍스트 추가 (스와이프 발견성 문제 방지)
+  - 폼 마크업을 두 번 두지 않고 하나만 유지해서 중복 id 문제 없이 구현
+- 위 1~4 항목 전부 tsc/lint/build 통과 확인
 
 ### 2026-08-29
 - **유저별 면접 히스토리 기능 완성**
@@ -93,9 +106,6 @@
 
 ## 다음 할 일
 
-- **히스토리 기록 삭제 기능** — `HistorySidebar`에서 지난 면접 기록을 삭제할 수 있게 (RLS로 본인 소유 확인, interview_sessions 삭제 시 메시지/리포트도 cascade 정리 필요)
-- **회원가입 시 실명 입력** — 이름을 받아서 면접관이 대화 중 지원자 이름을 참고하도록 연결 (예: user_metadata 또는 별도 profiles 테이블에 저장, kickoff 메시지에 반영)
-- **로그인 화면 모바일 브랜딩 슬라이드** — 현재 모바일에서는 브랜딩 패널(로고+"기술을 묻고, 사람을 보고, 압박을 견딘다"+면접관 뱃지)이 `hidden md:flex`로 아예 안 보임. 모바일에서는 브랜딩 화면을 먼저 보여주고, 좌우 스와이프하면 로그인 폼 화면으로 넘어가는 슬라이드(2패널 캐러셀) 방식으로 변경. 데스크톱은 기존 2열 레이아웃 그대로 유지
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기

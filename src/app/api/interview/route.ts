@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
+  // 회원가입 시 입력한 실명을 시스템 프롬프트에 심어서 면접관이 이름을 부르며 대화하게 한다.
+  // (DB에 별도로 저장하지 않고 매 요청마다 Supabase Auth의 user_metadata에서 바로 읽어온다)
+  const applicantName = (user.user_metadata as { full_name?: string } | undefined)?.full_name?.trim();
+  const systemPrompt = applicantName
+    ? `${SYSTEM_PROMPTS[interviewerRole]}\n\n지원자의 이름은 "${applicantName}"입니다. 대화 중 자연스럽게 이름을 불러주며 진행하세요.`
+    : SYSTEM_PROMPTS[interviewerRole];
+
   // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서 내용도 이때 함께 저장
   if (!sessionId) {
     const { data, error } = await supabase
@@ -77,7 +84,7 @@ export async function POST(request: NextRequest) {
       const claudeStream = anthropic.messages.stream({
         model: INTERVIEW_MODEL,
         max_tokens: 1024,
-        system: SYSTEM_PROMPTS[interviewerRole],
+        system: systemPrompt,
         messages,
       });
 

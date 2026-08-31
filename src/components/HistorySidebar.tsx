@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Plus, X, Trash2 } from "lucide-react";
 import { AppLogoIcon } from "@/components/AppLogoIcon";
+import { createClient } from "@/lib/supabase/client";
 
 // 사이드바에는 리포트가 이미 생성된(=완료된) 세션만 넣으므로 overallScore는 항상 존재한다.
 export interface HistorySidebarItem {
@@ -25,6 +27,27 @@ interface HistorySidebarProps {
 // 모바일(md 미만)에서는 fixed 드로어로 동작하고, md 이상에서는 항상 고정 노출되는 사이드바가 된다.
 export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // interview_messages/interview_reports는 session_id에 on delete cascade가 걸려 있어
+  // interview_sessions 한 행만 지우면 관련 메시지·리포트까지 DB에서 함께 정리된다.
+  // RLS(delete_own_sessions)가 본인 세션만 삭제 가능하게 막아준다.
+  async function handleDelete(id: string, href: string) {
+    if (!window.confirm("이 면접 기록을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
+
+    setDeletingId(id);
+    const supabase = createClient();
+    const { error } = await supabase.from("interview_sessions").delete().eq("id", id);
+    setDeletingId(null);
+
+    if (error) {
+      window.alert(`삭제에 실패했습니다: ${error.message}`);
+      return;
+    }
+    if (pathname === href) router.push("/"); // 보고 있던 기록이 삭제됐으면 홈으로 이동
+    router.refresh(); // 서버 컴포넌트(layout.tsx)가 목록을 다시 조회하도록
+  }
 
   return (
     <aside
@@ -78,11 +101,11 @@ export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) 
               day: "numeric",
             });
             return (
-              <li key={item.id}>
+              <li key={item.id} className="flex items-center gap-1">
                 <Link
                   href={href}
                   onClick={onClose}
-                  className={`flex flex-col gap-0.5 rounded-lg px-2 py-2 text-sm transition-colors ${
+                  className={`flex min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-2 py-2 text-sm transition-colors ${
                     active ? "bg-accent/10 text-accent" : "hover:bg-border"
                   }`}
                 >
@@ -92,6 +115,16 @@ export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) 
                     {item.overallScore != null && ` · ${item.overallScore.toFixed(1)}점`}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(item.id, href)}
+                  disabled={deletingId === item.id}
+                  aria-label="기록 삭제"
+                  title="기록 삭제"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </li>
             );
           })}
