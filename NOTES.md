@@ -106,6 +106,7 @@
 
 ## 다음 할 일
 
+- **리포트 PDF 다운로드** — 면접 종료 후 나오는 평가 리포트(`ReportCard`: 종합점수/총평/면접관별 피드백/강점·보완점)를 PDF 파일로 다운로드. 종료 화면과 `/history/[id]` 상세 페이지 둘 다에서 가능하게. 라이브러리 선정 필요(예: 브라우저 print-to-PDF 활용 vs jsPDF/react-pdf 등 클라이언트 렌더링)
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기
