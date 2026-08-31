@@ -53,8 +53,12 @@ export function InterviewChat() {
   const currentAccent = INTERVIEWER_ACCENT[currentRole];
   const currentMessages = history[currentRole];
 
-  // 수기 입력 + PDF에서 추출한 내용을 합쳐서 면접관에게 넘긴다. 둘 다 선택 사항이라 둘 다 비어있을 수도 있다.
+  // 수기 입력 + PDF에서 추출한 내용을 합쳐서 면접관에게 넘긴다. 사용자는 둘 중 하나만 채우면 된다.
   const combinedResumeContent = [resumeContent.trim(), resumeFileText.trim()].filter(Boolean).join("\n\n");
+
+  // 지원 직무는 필수, 이력서는 PDF 업로드/텍스트 입력 중 최소 하나가 있어야 시작 가능
+  // (직무·이력서 정보가 없으면 면접관이 두루뭉술한 질문만 하게 되고, 불필요한 토큰 낭비로 이어지기 쉽다)
+  const canStart = jobRole.trim().length > 0 && combinedResumeContent.length > 0 && !isExtractingResume;
 
   // 새 메시지가 추가될 때마다 대화창을 맨 아래로 스크롤
   useEffect(() => {
@@ -204,16 +208,9 @@ export function InterviewChat() {
     }
   }
 
-  // 지원 직무/이력서 요약이 입력되어 있으면 첫 질문에 반영되도록 트리거 메시지에 같이 담는다.
+  // 지원 직무/이력서가 첫 질문에 반영되도록 트리거 메시지에 같이 담는다. (둘 다 시작 전 필수 입력이라 항상 존재함)
   function buildKickoffMessage(): string {
-    const job = jobRole.trim();
-    const resume = combinedResumeContent;
-    if (!job && !resume) {
-      return "면접을 시작해주세요. 짧게 자기소개를 요청한 뒤 첫 질문을 해주세요.";
-    }
-    const context = [job && `지원 직무: ${job}`, resume && `이력서/경력 요약: ${resume}`]
-      .filter(Boolean)
-      .join("\n");
+    const context = [`지원 직무: ${jobRole.trim()}`, `이력서/경력 요약: ${combinedResumeContent}`].join("\n");
     return `면접을 시작해주세요. 아래 지원자 정보를 참고해서 자기소개를 짧게 요청한 뒤 관련된 첫 질문을 해주세요.\n\n${context}`;
   }
 
@@ -226,6 +223,7 @@ export function InterviewChat() {
   }
 
   function handleStart() {
+    if (!canStart) return; // 버튼이 disabled되어 있어 보통은 여기 도달하지 않지만 방어적으로 한 번 더 확인
     setStarted(true);
     startInterviewer(currentRole);
   }
@@ -328,15 +326,17 @@ export function InterviewChat() {
           })}
         </div>
 
-        {/* 지원 직무/이력서 요약 — 입력하면 첫 질문에 반영됨, 둘 다 선택 사항 */}
+        {/* 지원 직무는 필수, 이력서는 PDF 업로드/텍스트 입력 중 하나가 필수 — 정보 없이 시작하면 면접관이
+            두루뭉술한 질문만 반복하게 되어 토큰만 낭비하게 되므로 시작 전에 반드시 받아둔다. */}
         <div className="glass-card flex w-full max-w-2xl flex-col gap-3 rounded-xl p-4 text-left md:p-5">
           <div className="flex flex-col gap-1">
             <label htmlFor="jobRole" className="text-xs font-medium text-muted">
-              지원 직무 (선택)
+              지원 직무 (필수)
             </label>
             <input
               id="jobRole"
               type="text"
+              required
               value={jobRole}
               onChange={(e) => setJobRole(e.target.value)}
               placeholder="예: 프론트엔드 개발자"
@@ -345,7 +345,7 @@ export function InterviewChat() {
           </div>
           <div className="flex flex-col gap-2">
             <label htmlFor="resumeContent" className="text-xs font-medium text-muted">
-              이력서 / 경력 (선택)
+              이력서 / 경력 (필수 — PDF 업로드 또는 아래 직접 입력 중 하나)
             </label>
 
             {/* PDF 업로드 — 텍스트박스와는 별개. 내용을 화면에 보여주지 않고 면접관이 "기억"만 하게 한다. */}
@@ -355,7 +355,7 @@ export function InterviewChat() {
                   ? "PDF를 읽고 있습니다..."
                   : resumeFileText
                     ? `✅ ${resumeFileName} 분석 완료 — 면접관이 참고합니다`
-                    : "PDF 이력서가 있다면 업로드해보세요 (면접관이 내용을 기억하고 질문합니다)"}
+                    : "PDF 이력서를 업로드하거나, 아래에 직접 입력해주세요"}
               </span>
               <label
                 htmlFor="resumeFile"
@@ -384,20 +384,25 @@ export function InterviewChat() {
               value={resumeContent}
               onChange={(e) => setResumeContent(e.target.value)}
               rows={4}
-              placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적어주세요 (선택)"
+              placeholder="최근 프로젝트, 주요 기술 스택 등을 직접 적어주세요 (또는 위에서 PDF 업로드)"
               className="resize-none rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleStart}
-          disabled={isExtractingResume}
-          className="w-full max-w-sm rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 md:w-auto"
-        >
-          {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
-        </button>
+        <div className="flex w-full max-w-sm flex-col items-center gap-2 md:max-w-none">
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={!canStart}
+            className="w-full max-w-sm rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 md:w-auto"
+          >
+            {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
+          </button>
+          {!canStart && !isExtractingResume && (
+            <p className="text-xs text-muted">지원 직무와 이력서(PDF 또는 직접 입력)를 모두 입력해야 시작할 수 있습니다.</p>
+          )}
+        </div>
       </div>
     );
   }
