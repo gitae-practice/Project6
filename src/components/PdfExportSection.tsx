@@ -120,7 +120,7 @@ export function PdfExportSection({ fileName, header, report, transcript }: PdfEx
             {isMenuOpen && (
               <div
                 ref={menuRef}
-                className="glass-card absolute right-0 top-full z-20 mt-2 w-52 rounded-xl bg-surface p-4 shadow-lg"
+                className="absolute right-0 top-full z-20 mt-2 w-52 rounded-xl border border-border bg-surface p-4 shadow-lg"
               >
                 <p className="mb-3 text-xs font-medium text-muted">포함할 내용</p>
                 <div className="flex flex-col gap-2">
