@@ -117,6 +117,11 @@
 
 ## 다음 할 일
 
+- **관리자 페이지** — 전체 유저 계정 정보 + 사용 내역(면접 세션/리포트) 열람·삭제
+  - 계정: `admin@admin.com` / `admin1234` (실제 메일 못 받는 주소라 service_role 키로 이메일 인증 없이 직접 생성 예정)
+  - 전체 유저 데이터 조회는 RLS를 우회해야 해서 Supabase **service_role 키**가 필요함 (대시보드 → Settings → API → service_role secret) — 어떻게 전달할지는 다음 세션에서 다시 확인
+  - `/admin` 라우트를 만들어 `user.email === 'admin@admin.com'`인 경우만 접근 허용, 그 외에는 리다이렉트
+  - 화면 구성(안): 유저 목록(이메일/이름/가입일/완료한 면접 수) + 계정 삭제(cascade로 세션/메시지/리포트까지 자동 정리) / 유저별 세션 목록(직무/날짜/점수) + 세션 단위 삭제 / 세션 상세(리포트+대화 전문) 열람
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기
