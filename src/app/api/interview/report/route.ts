@@ -1,29 +1,19 @@
 import type { NextRequest } from "next/server";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic, INTERVIEW_MODEL } from "@/lib/anthropic";
-import { INTERVIEWER_META, INTERVIEWER_ORDER, type InterviewerRole } from "@/lib/interview/roles";
+import { INTERVIEWER_META, INTERVIEWER_ORDER } from "@/lib/interview/roles";
 import { InterviewReportSchema } from "@/lib/interview/report";
+import { isKickoffTurn, type HistoryByRole } from "@/lib/interview/transcript";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-interface ChatTurn {
-  role: "user" | "assistant";
-  content: string;
-}
-
-type HistoryByRole = Record<InterviewerRole, ChatTurn[]>;
-
-// 면접 시작을 알리는 트리거 메시지는 실제 대화 내용이 아니므로 리포트 생성 시 제외한다.
-function isKickoffMessage(turn: ChatTurn) {
-  return turn.role === "user" && turn.content.startsWith("면접을 시작해주세요");
-}
-
 // 3명의 면접관과 나눈 대화를 한 편의 텍스트로 합쳐 평가 모델이 읽기 좋게 만든다.
+// (면접 시작을 알리는 트리거 메시지는 실제 대화 내용이 아니므로 제외)
 function buildTranscript(history: HistoryByRole): string {
   return INTERVIEWER_ORDER.map((role) => {
     const lines = history[role]
-      .filter((turn) => !isKickoffMessage(turn))
+      .filter((turn) => !isKickoffTurn(turn))
       .map((turn) => `${turn.role === "user" ? "지원자" : INTERVIEWER_META[role].label}: ${turn.content}`)
       .join("\n");
     return `### ${INTERVIEWER_META[role].label}\n${lines || "(대화 없음)"}`;

@@ -11,17 +11,13 @@ import {
   type InterviewerRole,
 } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
-import { ReportWithDownload } from "@/components/ReportWithDownload";
-
-interface ChatTurn {
-  role: "user" | "assistant";
-  content: string;
-}
+import { isKickoffTurn, type ChatTurn, type HistoryByRole } from "@/lib/interview/transcript";
+import { PdfExportSection } from "@/components/PdfExportSection";
+import { ReportCard } from "@/components/ReportCard";
+import { InterviewTranscript } from "@/components/InterviewTranscript";
 
 // 면접관마다 대화 히스토리를 따로 관리한다.
 // (기술 면접관과 나눈 대화를 인성 면접관에게 그대로 넘기면 맥락이 뒤섞이므로 분리)
-type HistoryByRole = Record<InterviewerRole, ChatTurn[]>;
-
 const EMPTY_HISTORY: HistoryByRole = {
   technical: [],
   personality: [],
@@ -427,11 +423,23 @@ export function InterviewChat() {
           </div>
         )}
 
+        {/* 날짜/직무 헤더 + 리포트 + 대화 전문 전부 PdfExportSection 안에 넣어서
+            PDF 다운로드 시 화면에 보이는 내용이 그대로 한 장에 담기게 한다. */}
         {report && (
-          <ReportWithDownload
-            report={report}
+          <PdfExportSection
             fileName={`오늘의면접관_${jobRole.trim().replace(/[\\/:*?"<>|]/g, "_")}_리포트.pdf`}
-          />
+          >
+            <div className="flex flex-col gap-6 text-left">
+              <div>
+                <p className="text-xs text-muted">
+                  {new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+                <h1 className="text-xl font-bold">{jobRole.trim() || "직무 미입력"}</h1>
+              </div>
+              <ReportCard report={report} />
+              <InterviewTranscript history={history} />
+            </div>
+          </PdfExportSection>
         )}
 
         <button
@@ -515,7 +523,7 @@ export function InterviewChat() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 md:px-4 md:py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {currentMessages
-            .filter((m, i) => !(i === 0 && m.content.startsWith("면접을 시작해주세요"))) // 트리거 메시지는 화면에서 숨김
+            .filter((m) => !isKickoffTurn(m)) // 트리거 메시지는 화면에서 숨김
             .map((message, i) =>
               message.role === "user" ? (
                 <div
