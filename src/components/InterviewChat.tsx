@@ -423,23 +423,22 @@ export function InterviewChat() {
           </div>
         )}
 
-        {/* 날짜/직무 헤더 + 리포트 + 대화 전문 전부 PdfExportSection 안에 넣어서
-            PDF 다운로드 시 화면에 보이는 내용이 그대로 한 장에 담기게 한다. */}
+        {/* 날짜/직무 헤더 + 다운로드 버튼(우측 상단 고정) + 리포트 + 대화 전문을
+            PdfExportSection이 하나의 캡처 영역으로 묶는다. */}
         {report && (
           <PdfExportSection
             fileName={`오늘의면접관_${jobRole.trim().replace(/[\\/:*?"<>|]/g, "_")}_리포트.pdf`}
-          >
-            <div className="flex flex-col gap-6 text-left">
+            header={
               <div>
                 <p className="text-xs text-muted">
                   {new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
                 </p>
                 <h1 className="text-xl font-bold">{jobRole.trim() || "직무 미입력"}</h1>
               </div>
-              <ReportCard report={report} />
-              <InterviewTranscript history={history} />
-            </div>
-          </PdfExportSection>
+            }
+            report={<ReportCard report={report} />}
+            transcript={<InterviewTranscript history={history} />}
+          />
         )}
 
         <button

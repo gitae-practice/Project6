@@ -15,6 +15,10 @@
   - **버그**: 실사용 테스트에서 "PDF 생성에 실패했습니다" 발생 — 원인은 Tailwind v4 기본 팔레트(`blue-400` 등)가 `oklch()` 색상 함수를 쓰는데 원조 html2canvas가 이를 파싱하지 못해서였음. `html2canvas-pro`(oklch/oklab/lab/lch 지원 포크)로 교체해서 해결 (앱 스타일링에는 영향 없음, 캡처 도구만 교체)
   - **개선**: PDF에 날짜/직무 헤더와 대화 전문이 안 담긴다는 피드백 반영 — `ReportWithDownload`를 `report` 전용에서 `children`을 받는 범용 `PdfExportSection`으로 일반화하고, 날짜/직무 헤더 + `ReportCard` + `InterviewTranscript`(신규, 대화 전문 렌더링 공통 컴포넌트)를 전부 캡처 영역 안에 넣음 — 면접 종료 화면에도 이제 대화 전문이 함께 보이고 PDF에도 그대로 포함됨
   - 이 김에 `ChatTurn`/`HistoryByRole`/트리거 메시지 판별 로직이 `InterviewChat.tsx`·`report/route.ts`·`history/[id]/page.tsx` 세 곳에 각각 따로 있던 것을 `lib/interview/transcript.ts`로 통합 (중복 제거)
+  - **재구성**: 버튼을 우측 상단 고정 + 클릭 시 바로 다운로드하지 않고 체크박스(리포트/대화 내역)로 포함할 내용을 먼저 고른 뒤 다운로드하도록 변경
+    - `PdfExportSection`을 `children` 방식에서 `header`/`report`/`transcript` 세 개의 슬롯을 받는 방식으로 재설계
+    - 버튼+체크박스 팝오버는 헤더와 같은 줄 우측에 배치, 캡처 직전에만 `visibility: hidden`으로 잠깐 숨겼다가 캡처 후 복원 (React state 리렌더를 기다리지 않고 ref로 직접 DOM 스타일을 건드려서 html2canvas 호출 시점과 동기적으로 맞춤)
+    - 리포트/대화 내역도 같은 방식(ref + `style.display`)으로 체크 해제 시 캡처에서 제외
 
 ### 2026-08-31
 - **지원 직무 필수화 + 이력서 입력 검증 (토큰 낭비 방지)**
