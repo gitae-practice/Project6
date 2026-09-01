@@ -13,11 +13,15 @@ interface ReportWithDownloadProps {
 // ReportCard를 그대로 캡처해 PDF로 저장하는 다운로드 버튼을 붙인 래퍼.
 // 방금 끝난 면접 화면(InterviewChat)과 지난 기록 상세 화면(history/[id]) 둘 다에서 재사용한다.
 //
-// 텍스트 기반 PDF(예: @react-pdf/renderer) 대신 화면 스크린샷 방식(html2canvas + jsPDF)을 쓴 이유:
+// 텍스트 기반 PDF(예: @react-pdf/renderer) 대신 화면 스크린샷 방식(html2canvas-pro + jsPDF)을 쓴 이유:
 // 리포트 카드가 한글이라 PDF 라이브러리에 한글 폰트를 별도로 임베드해야 하는데, 이러면 폰트 파일을
 // 따로 번들에 넣어야 하고 라이트/다크 테마·아이콘·컬러 같은 실제 디자인을 그대로 옮기려면 카드 레이아웃을
 // PDF 전용 컴포넌트로 통째로 다시 만들어야 한다. 화면을 그대로 캡처하면 이미 그려진 디자인을 그대로
 // 재사용할 수 있고 폰트 문제도 없다.
+//
+// html2canvas가 아니라 html2canvas-pro를 쓰는 이유: Tailwind v4 기본 팔레트(blue-400 등)가
+// oklch() 색상 함수를 쓰는데, 원조 html2canvas는 oklch를 못 읽어서 캡처 도중 에러가 난다.
+// html2canvas-pro는 oklch/oklab/lab/lch까지 지원하는 유지보수 포크라 그대로 대체해서 쓴다.
 export function ReportWithDownload({ report, fileName }: ReportWithDownloadProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -28,9 +32,9 @@ export function ReportWithDownload({ report, fileName }: ReportWithDownloadProps
     setIsExporting(true);
     setExportError(null);
     try {
-      // html2canvas/jsPDF는 이 버튼을 누를 때만 필요하므로 동적 import로 초기 번들에서 제외한다.
+      // html2canvas-pro/jsPDF는 이 버튼을 누를 때만 필요하므로 동적 import로 초기 번들에서 제외한다.
       const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import("html2canvas"),
+        import("html2canvas-pro"),
         import("jspdf"),
       ]);
 
@@ -50,7 +54,9 @@ export function ReportWithDownload({ report, fileName }: ReportWithDownloadProps
       });
       pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, canvas.width, canvas.height);
       pdf.save(fileName);
-    } catch {
+    } catch (error) {
+      // 사용자에게는 간단한 메시지만 보여주고, 원인은 콘솔에 남겨서 다음에 디버깅하기 쉽게 한다.
+      console.error("PDF 생성 실패:", error);
       setExportError("PDF 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setIsExporting(false);
