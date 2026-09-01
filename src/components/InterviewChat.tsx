@@ -11,7 +11,7 @@ import {
   type InterviewerRole,
 } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
-import { ReportCard } from "@/components/ReportCard";
+import { ReportWithDownload } from "@/components/ReportWithDownload";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -427,7 +427,12 @@ export function InterviewChat() {
           </div>
         )}
 
-        {report && <ReportCard report={report} />}
+        {report && (
+          <ReportWithDownload
+            report={report}
+            fileName={`오늘의면접관_${jobRole.trim().replace(/[\\/:*?"<>|]/g, "_")}_리포트.pdf`}
+          />
+        )}
 
         <button
           type="button"

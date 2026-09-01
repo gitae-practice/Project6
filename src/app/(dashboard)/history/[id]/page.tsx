@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { ReportCard } from "@/components/ReportCard";
+import { ReportWithDownload } from "@/components/ReportWithDownload";
 import { INTERVIEWER_META, INTERVIEWER_ICON, INTERVIEWER_ACCENT, type InterviewerRole } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
 
@@ -61,7 +61,10 @@ export default async function HistoryDetailPage(props: PageProps<"/history/[id]"
           <h1 className="text-xl font-bold">{session.job_role || "직무 미입력"}</h1>
         </div>
 
-        <ReportCard report={report} />
+        <ReportWithDownload
+          report={report}
+          fileName={`오늘의면접관_${(session.job_role || "면접").replace(/[\\/:*?"<>|]/g, "_")}_리포트.pdf`}
+        />
 
         <div className="flex flex-col gap-6">
           <p className="text-sm font-medium text-muted">전체 대화</p>

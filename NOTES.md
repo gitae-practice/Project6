@@ -2,6 +2,17 @@
 
 ## 완료된 작업
 
+### 2026-08-31 (계속)
+- **로그인/회원가입 에러 메시지 한글화**
+  - Supabase Auth 에러(`Invalid login credentials`, `User already registered` 등)를 `translateAuthError()`로 매핑해 한글로 표시
+  - ID/PW 중 어느 쪽이 틀렸는지는 의도적으로 구분하지 않음 — 구분하면 특정 이메일의 가입 여부를 외부에서 알아낼 수 있는 계정 유출(user enumeration) 취약점이 생기기 때문에 Supabase가 원래도 동일한 메시지를 주는 것 (보안 설계를 그대로 존중)
+- **리포트 PDF 다운로드**
+  - `ReportWithDownload` 컴포넌트 신규 — `ReportCard`를 감싸서 "PDF로 다운로드" 버튼 제공, 면접 종료 화면/`/history/[id]` 상세 페이지 둘 다에서 재사용
+  - html2canvas로 화면에 실제 렌더링된 카드를 캡처 → jsPDF로 캡처 크기 그대로 한 페이지 PDF 생성 (A4 강제 맞춤 없이 잘림 방지)
+  - 텍스트 기반 PDF(@react-pdf/renderer 등) 대신 스크린샷 방식을 택한 이유: 한글 폰트를 PDF 라이브러리에 별도로 임베드할 필요 없이 현재 테마/디자인을 그대로 재사용할 수 있어서
+  - html2canvas/jsPDF는 다운로드 버튼을 누를 때만 동적 import로 불러와 초기 번들 크기에 영향 없음 (빌드 청크 분리 확인)
+  - tsc/lint/build 전부 통과 확인
+
 ### 2026-08-31
 - **지원 직무 필수화 + 이력서 입력 검증 (토큰 낭비 방지)**
   - `canStart = jobRole 있음 && (PDF 추출 텍스트 또는 수기 입력 중 하나 있음) && 분석 중 아님`으로 게이팅
@@ -106,7 +117,6 @@
 
 ## 다음 할 일
 
-- **리포트 PDF 다운로드** — 면접 종료 후 나오는 평가 리포트(`ReportCard`: 종합점수/총평/면접관별 피드백/강점·보완점)를 PDF 파일로 다운로드. 종료 화면과 `/history/[id]` 상세 페이지 둘 다에서 가능하게. 라이브러리 선정 필요(예: 브라우저 print-to-PDF 활용 vs jsPDF/react-pdf 등 클라이언트 렌더링)
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기
