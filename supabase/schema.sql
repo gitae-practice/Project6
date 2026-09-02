@@ -5,14 +5,16 @@
 create table if not exists interview_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade, -- 이 세션의 소유자
-  job_role text, -- 지원 직무 (선택 입력)
-  resume_content text, -- 이력서 내용: 직접 입력 또는 PDF 업로드 시 Claude가 추출한 원문 (선택 입력)
+  job_role text, -- 지원 직무 (필수 입력)
+  resume_content text, -- 이력서 내용: 직접 입력 또는 PDF 업로드 시 Claude가 추출한 원문 (필수 - 둘 중 하나)
+  portfolio_content text, -- 포트폴리오 PDF 업로드 시 Claude가 추출한 원문 (선택 입력)
   created_at timestamptz not null default now()
 );
 
 -- 이미 만들어진 테이블에 새 컬럼을 추가하는 경우를 위한 안전한 재실행용 구문
 alter table interview_sessions add column if not exists job_role text;
 alter table interview_sessions add column if not exists resume_content text;
+alter table interview_sessions add column if not exists portfolio_content text;
 alter table interview_sessions add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
 -- 세션 안의 개별 메시지 (사용자 답변 / 면접관 질문·피드백)

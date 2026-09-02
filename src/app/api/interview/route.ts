@@ -17,11 +17,12 @@ interface InterviewRequestBody {
   messages: ChatTurn[]; // 지금까지의 대화 전체 (Claude API는 상태를 저장하지 않음)
   jobRole?: string; // 지원 직무 (세션 최초 생성 시에만 저장됨)
   resumeContent?: string; // 이력서 내용 (직접 입력 또는 PDF 추출, 세션 최초 생성 시에만 저장됨)
+  portfolioContent?: string; // 포트폴리오 PDF 추출 내용 (선택, 세션 최초 생성 시에만 저장됨)
 }
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as InterviewRequestBody;
-  const { interviewerRole, messages, jobRole, resumeContent } = body;
+  const { interviewerRole, messages, jobRole, resumeContent, portfolioContent } = body;
   let { sessionId } = body;
 
   if (!SYSTEM_PROMPTS[interviewerRole]) {
@@ -45,11 +46,16 @@ export async function POST(request: NextRequest) {
     ? `${SYSTEM_PROMPTS[interviewerRole]}\n\n지원자의 이름은 "${applicantName}"입니다. 대화 중 자연스럽게 이름을 불러주며 진행하세요.`
     : SYSTEM_PROMPTS[interviewerRole];
 
-  // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서 내용도 이때 함께 저장
+  // 세션이 없으면 새로 생성 (면접 전체에서 첫 질문일 때만) — 지원 직무/이력서/포트폴리오 내용도 이때 함께 저장
   if (!sessionId) {
     const { data, error } = await supabase
       .from("interview_sessions")
-      .insert({ user_id: user.id, job_role: jobRole || null, resume_content: resumeContent || null })
+      .insert({
+        user_id: user.id,
+        job_role: jobRole || null,
+        resume_content: resumeContent || null,
+        portfolio_content: portfolioContent || null,
+      })
       .select("id")
       .single();
 

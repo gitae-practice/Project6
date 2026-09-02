@@ -12,7 +12,9 @@ import {
 } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
 import { isKickoffTurn, type ChatTurn, type HistoryByRole } from "@/lib/interview/transcript";
+import { extractPdfText } from "@/lib/interview/extractPdf";
 import { PdfExportSection } from "@/components/PdfExportSection";
+import { PdfUploadStrip } from "@/components/PdfUploadStrip";
 import { ReportCard } from "@/components/ReportCard";
 import { InterviewTranscript } from "@/components/InterviewTranscript";
 
@@ -39,6 +41,10 @@ export function InterviewChat() {
   const [resumeFileText, setResumeFileText] = useState(""); // PDF에서 추출한 내용 — 화면에 노출하지 않고 기억만 해둠
   const [isExtractingResume, setIsExtractingResume] = useState(false);
   const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
+  const [portfolioFileName, setPortfolioFileName] = useState("");
+  const [portfolioFileText, setPortfolioFileText] = useState(""); // 포트폴리오는 선택 사항 — 비어있어도 됨
+  const [isExtractingPortfolio, setIsExtractingPortfolio] = useState(false);
+  const [portfolioUploadError, setPortfolioUploadError] = useState<string | null>(null);
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -54,7 +60,13 @@ export function InterviewChat() {
 
   // 지원 직무는 필수, 이력서는 PDF 업로드/텍스트 입력 중 최소 하나가 있어야 시작 가능
   // (직무·이력서 정보가 없으면 면접관이 두루뭉술한 질문만 하게 되고, 불필요한 토큰 낭비로 이어지기 쉽다)
-  const canStart = jobRole.trim().length > 0 && combinedResumeContent.length > 0 && !isExtractingResume;
+  // 포트폴리오는 선택 사항이라 없어도 시작 가능하지만, 분석이 끝나기 전에 시작해버리면
+  // 그 내용이 반영되지 않으므로 분석 중일 때는 다른 업로드와 마찬가지로 막는다.
+  const canStart =
+    jobRole.trim().length > 0 &&
+    combinedResumeContent.length > 0 &&
+    !isExtractingResume &&
+    !isExtractingPortfolio;
 
   // 새 메시지가 추가될 때마다 대화창을 맨 아래로 스크롤
   useEffect(() => {
@@ -68,13 +80,14 @@ export function InterviewChat() {
     const response = await fetch("/api/interview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // jobRole/resumeContent는 세션이 처음 만들어질 때만 서버에서 사용되고, 이후 요청에선 무시된다.
+      // jobRole/resumeContent/portfolioContent는 세션이 처음 만들어질 때만 서버에서 사용되고, 이후 요청에선 무시된다.
       body: JSON.stringify({
         sessionId,
         interviewerRole: role,
         messages,
         jobRole,
         resumeContent: combinedResumeContent,
+        portfolioContent: portfolioFileText.trim(),
       }),
     });
 
@@ -154,49 +167,14 @@ export function InterviewChat() {
     setIsStreaming(false);
   }
 
-  // PDF 파일을 base64 문자열로 변환한다 (data: 접두사는 잘라낸다).
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
-      reader.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // 이력서 PDF를 업로드하면 Claude가 직접 내용을 읽어 요약하고, 그 결과로 "이력서/경력 요약" 칸을 채운다.
+  // 이력서 PDF를 업로드하면 Claude가 직접 내용을 읽어 텍스트로 옮기고, 그 결과를 기억해둔다.
   // 별도 OCR 라이브러리 없이 Claude의 문서(document) 입력 기능을 그대로 사용한다.
-  async function handleResumeFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = ""; // 같은 파일을 다시 선택해도 onChange가 발생하도록 초기화
-    if (!file) return;
-
+  async function handleResumeFileChange(file: File) {
     setResumeUploadError(null);
-
-    if (file.type !== "application/pdf") {
-      setResumeUploadError("PDF 파일만 업로드할 수 있습니다.");
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setResumeUploadError("파일이 너무 큽니다 (10MB 이하).");
-      return;
-    }
-
     setResumeFileName(file.name);
     setIsExtractingResume(true);
     try {
-      const fileBase64 = await fileToBase64(file);
-      const response = await fetch("/api/interview/extract-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileBase64 }),
-      });
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "이력서 분석에 실패했습니다.");
-      }
-      const data = (await response.json()) as { content: string };
-      setResumeFileText(data.content); // 텍스트박스(resumeContent)에는 넣지 않고 별도로 기억만 해둔다
+      setResumeFileText(await extractPdfText(file, "resume")); // 텍스트박스(resumeContent)에는 넣지 않고 별도로 기억만 해둔다
     } catch (error) {
       setResumeUploadError(error instanceof Error ? error.message : "이력서 분석 중 오류가 발생했습니다.");
     } finally {
@@ -204,9 +182,30 @@ export function InterviewChat() {
     }
   }
 
-  // 지원 직무/이력서가 첫 질문에 반영되도록 트리거 메시지에 같이 담는다. (둘 다 시작 전 필수 입력이라 항상 존재함)
+  // 포트폴리오 PDF 업로드 — 이력서와 같은 방식(Claude 문서 입력)으로 처리하되 선택 사항이다.
+  async function handlePortfolioFileChange(file: File) {
+    setPortfolioUploadError(null);
+    setPortfolioFileName(file.name);
+    setIsExtractingPortfolio(true);
+    try {
+      setPortfolioFileText(await extractPdfText(file, "portfolio"));
+    } catch (error) {
+      setPortfolioUploadError(error instanceof Error ? error.message : "포트폴리오 분석 중 오류가 발생했습니다.");
+    } finally {
+      setIsExtractingPortfolio(false);
+    }
+  }
+
+  // 지원 직무/이력서/포트폴리오가 첫 질문에 반영되도록 트리거 메시지에 같이 담는다.
+  // (직무·이력서는 시작 전 필수 입력이라 항상 존재하고, 포트폴리오는 선택이라 없으면 그냥 생략된다)
   function buildKickoffMessage(): string {
-    const context = [`지원 직무: ${jobRole.trim()}`, `이력서/경력 요약: ${combinedResumeContent}`].join("\n");
+    const context = [
+      `지원 직무: ${jobRole.trim()}`,
+      `이력서/경력 요약: ${combinedResumeContent}`,
+      portfolioFileText.trim() && `포트폴리오 내용: ${portfolioFileText.trim()}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
     return `면접을 시작해주세요. 아래 지원자 정보를 참고해서 자기소개를 짧게 요청한 뒤 관련된 첫 질문을 해주세요.\n\n${context}`;
   }
 
@@ -262,6 +261,9 @@ export function InterviewChat() {
     setResumeFileName("");
     setResumeFileText("");
     setResumeUploadError(null);
+    setPortfolioFileName("");
+    setPortfolioFileText("");
+    setPortfolioUploadError(null);
     setReport(null);
     setReportError(null);
   }
@@ -345,34 +347,15 @@ export function InterviewChat() {
             </label>
 
             {/* PDF 업로드 — 텍스트박스와는 별개. 내용을 화면에 보여주지 않고 면접관이 "기억"만 하게 한다. */}
-            <div className="flex items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5">
-              <span className="flex-1 truncate text-xs text-muted">
-                {isExtractingResume
-                  ? "PDF를 읽고 있습니다..."
-                  : resumeFileText
-                    ? `✅ ${resumeFileName} 분석 완료 — 면접관이 참고합니다`
-                    : "PDF 이력서를 업로드하거나, 아래에 직접 입력해주세요"}
-              </span>
-              <label
-                htmlFor="resumeFile"
-                className={`shrink-0 cursor-pointer rounded-lg border px-3 py-1 text-xs transition-colors ${
-                  isExtractingResume
-                    ? "cursor-not-allowed border-border text-muted"
-                    : "border-accent/40 text-accent hover:bg-accent/10"
-                }`}
-              >
-                PDF 선택
-              </label>
-              <input
-                id="resumeFile"
-                type="file"
-                accept="application/pdf"
-                onChange={handleResumeFileChange}
-                disabled={isExtractingResume}
-                className="hidden"
-              />
-            </div>
-            {resumeUploadError && <p className="text-xs text-red-500">{resumeUploadError}</p>}
+            <PdfUploadStrip
+              inputId="resumeFile"
+              idleText="PDF 이력서를 업로드하거나, 아래에 직접 입력해주세요"
+              successText={`✅ ${resumeFileName} 분석 완료 — 면접관이 참고합니다`}
+              isExtracting={isExtractingResume}
+              hasResult={Boolean(resumeFileText)}
+              error={resumeUploadError}
+              onFileSelected={(file) => void handleResumeFileChange(file)}
+            />
 
             {/* 직접 입력 — PDF 업로드와 무관하게 순수 수기 입력용 */}
             <textarea
@@ -384,6 +367,19 @@ export function InterviewChat() {
               className="resize-none rounded-xl border border-border bg-white/6 px-4 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
           </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-muted">포트폴리오 (선택)</label>
+            <PdfUploadStrip
+              inputId="portfolioFile"
+              idleText="포트폴리오 PDF가 있다면 업로드해보세요 (면접관이 프로젝트를 참고해서 질문합니다)"
+              successText={`✅ ${portfolioFileName} 분석 완료 — 면접관이 참고합니다`}
+              isExtracting={isExtractingPortfolio}
+              hasResult={Boolean(portfolioFileText)}
+              error={portfolioUploadError}
+              onFileSelected={(file) => void handlePortfolioFileChange(file)}
+            />
+          </div>
         </div>
 
         <div className="flex w-full max-w-sm flex-col items-center gap-2 md:max-w-none">
@@ -393,9 +389,13 @@ export function InterviewChat() {
             disabled={!canStart}
             className="w-full max-w-sm rounded-xl bg-linear-to-r from-orange-500 to-amber-500 px-6 py-3 font-medium text-white shadow-lg shadow-orange-500/25 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 md:w-auto"
           >
-            {isExtractingResume ? "이력서 분석 중..." : "시작하기"}
+            {isExtractingResume
+              ? "이력서 분석 중..."
+              : isExtractingPortfolio
+                ? "포트폴리오 분석 중..."
+                : "시작하기"}
           </button>
-          {!canStart && !isExtractingResume && (
+          {!canStart && !isExtractingResume && !isExtractingPortfolio && (
             <p className="text-xs text-muted">지원 직무와 이력서(PDF 또는 직접 입력)를 모두 입력해야 시작할 수 있습니다.</p>
           )}
         </div>

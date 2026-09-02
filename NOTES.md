@@ -2,6 +2,15 @@
 
 ## 완료된 작업
 
+### 2026-08-31 (계속 2)
+- **포트폴리오 PDF 업로드 추가** (선택 사항)
+  - `interview_sessions`에 `portfolio_content` 컬럼 추가 — **schema.sql 재실행 필요**
+  - `/api/interview/extract-resume`를 `/api/interview/extract-pdf`로 일반화 — 이력서/포트폴리오 둘 다 처리 방식이 동일(PDF를 Claude 문서 입력으로 그대로 읽어 텍스트 추출)해서 `kind: "resume" | "portfolio"` 파라미터로 안내 문구만 다르게 줌
+  - 클라이언트 쪽 파일 검증+base64 변환+API 호출 로직을 `lib/interview/extractPdf.ts`로, 업로드 UI(점선 박스+PDF 선택 버튼+상태 문구)를 `PdfUploadStrip` 컴포넌트로 뽑아서 이력서/포트폴리오 둘 다 재사용
+  - 이력서는 필수(PDF/텍스트 중 하나), 포트폴리오는 선택 — `canStart`에는 포트폴리오 "분석 중"만 걸리고 존재 여부는 안 걸림
+  - 면접관에게는 "포트폴리오 내용: ..."으로 이력서와 구분해서 전달 → 포트폴리오 속 프로젝트를 구체적으로 참고해서 질문 가능
+  - tsc/lint/build 전부 통과 확인
+
 ### 2026-08-31 (계속)
 - **로그인/회원가입 에러 메시지 한글화**
   - Supabase Auth 에러(`Invalid login credentials`, `User already registered` 등)를 `translateAuthError()`로 매핑해 한글로 표시
