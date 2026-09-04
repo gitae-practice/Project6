@@ -7,6 +7,7 @@ import { Mail, Lock, User, Code2, Heart, Zap, ChevronRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppLogoIcon } from "@/components/AppLogoIcon";
+import { ADMIN_EMAIL } from "@/lib/admin";
 
 type Mode = "login" | "signup";
 
@@ -66,6 +67,13 @@ export function AuthForm() {
       if (error) {
         setError(translateAuthError(error));
         setIsSubmitting(false);
+        return;
+      }
+      // 관리자 계정은 로그인 직후 한 번만 대시보드로 보낸다. 레이아웃 쪽에서 매번 강제로
+      // 리다이렉트시키면 이후 admin 계정이 다른 화면으로 이동할 방법이 아예 없어지므로
+      // (버튼을 눌러도 도로 튕겨나옴) 여기 "로그인 성공 시점"에서만 한 번 처리한다.
+      if (email.trim().toLowerCase() === ADMIN_EMAIL) {
+        router.push("/admin");
         return;
       }
       router.refresh(); // 서버 컴포넌트가 로그인 상태를 다시 읽도록 새로고침
