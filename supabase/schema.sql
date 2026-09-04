@@ -164,10 +164,14 @@ declare
   v_in_progress_week bigint;
   v_in_progress_month bigint;
 
-  v_new_today bigint;
-  v_new_day bigint; -- 어제 신규 가입자
-  v_new_week bigint; -- 지난주 같은 요일 신규 가입자
-  v_new_month bigint; -- 지난달 같은 날짜 신규 가입자
+  -- 신규 가입자는 다른 지표(누적 값)와 달리 애초에 "어떤 기간 동안 새로 생긴 수"라서
+  -- 일/주/월 각각 그 기간 자체의 값과, 그 직전 동일 길이 기간의 값을 따로 구한다.
+  v_new_users_day bigint; -- 오늘
+  v_new_users_day_prev bigint; -- 어제
+  v_new_users_week bigint; -- 최근 7일
+  v_new_users_week_prev bigint; -- 그 이전 7일
+  v_new_users_month bigint; -- 최근 1개월
+  v_new_users_month_prev bigint; -- 그 이전 1개월
 
   v_avg_score numeric;
   v_avg_score_day numeric;
@@ -216,10 +220,16 @@ begin
   where s.created_at <= month_ago
     and not exists (select 1 from interview_reports r where r.session_id = s.id and r.created_at <= month_ago);
 
-  select count(*) into v_new_today from auth.users where created_at::date = current_date;
-  select count(*) into v_new_day from auth.users where created_at::date = (current_date - 1);
-  select count(*) into v_new_week from auth.users where created_at::date = (current_date - 7);
-  select count(*) into v_new_month from auth.users where created_at::date = (current_date - interval '1 month')::date;
+  select count(*) into v_new_users_day from auth.users where created_at::date = current_date;
+  select count(*) into v_new_users_day_prev from auth.users where created_at::date = (current_date - 1);
+
+  select count(*) into v_new_users_week from auth.users where created_at >= week_ago;
+  select count(*) into v_new_users_week_prev
+  from auth.users where created_at >= (week_ago - interval '7 days') and created_at < week_ago;
+
+  select count(*) into v_new_users_month from auth.users where created_at >= month_ago;
+  select count(*) into v_new_users_month_prev
+  from auth.users where created_at >= (month_ago - interval '1 month') and created_at < month_ago;
 
   -- 평균 점수 = "전체 면접의 평균"이 아니라 "유저별 평균의 평균" — 유저 한 명 한 명이 동일한
   -- 비중을 갖도록 한 번 더 평균낸다 (면접을 많이/적게 본 유저가 전체 평균을 과도하게 끌지 않게).
@@ -268,8 +278,12 @@ begin
     'in_progress_sessions', jsonb_build_object(
       'value', v_in_progress, 'day', v_in_progress_day, 'week', v_in_progress_week, 'month', v_in_progress_month
     ),
-    'new_users_today', jsonb_build_object(
-      'value', v_new_today, 'day', v_new_day, 'week', v_new_week, 'month', v_new_month
+    -- 신규 가입자는 스톡(누적)이 아니라 플로우(기간 동안 발생) 지표라서 모양이 다르다 —
+    -- 일/주/월 각각 "그 기간의 값"과 "그 직전 동일 길이 기간의 값"을 쌍으로 준다.
+    'new_users', jsonb_build_object(
+      'day', jsonb_build_object('value', v_new_users_day, 'previous', v_new_users_day_prev),
+      'week', jsonb_build_object('value', v_new_users_week, 'previous', v_new_users_week_prev),
+      'month', jsonb_build_object('value', v_new_users_month, 'previous', v_new_users_month_prev)
     ),
     'average_score', jsonb_build_object(
       'value', round(v_avg_score::numeric, 1),
@@ -377,6 +391,9 @@ grant execute on function admin_list_users() to authenticated;
 -- 전체 세션 목록 — 이메일은 마스킹, user_id는 화면에는 안 보이지만 유저별 필터링용으로 같이 내려준다.
 -- 유저가 소프트 삭제한(deleted_at 있는) 세션도 관리자에게는 그대로 보여주고 is_deleted로 표시만 한다
 -- (유저 화면에서만 숨겨야 하는 것이지, 관리자 감사 목적으로는 삭제 여부와 무관하게 볼 수 있어야 함).
+-- auth.users와는 반드시 LEFT JOIN — 로그인 기능을 붙이기 전(초기 개발 단계)에 만들어진 세션은
+-- user_id가 비어있을 수 있는데, INNER JOIN이면 이런 세션들이 통째로 빠져서 admin_dashboard_stats()의
+-- 전체 개수(created_at 기준 집계, 유저 매칭과 무관)와 이 목록의 행 수가 안 맞아 보이는 문제가 있었다.
 create or replace function admin_list_sessions()
 returns jsonb
 language plpgsql
@@ -396,14 +413,14 @@ begin
     select
       s.id as session_id,
       s.user_id,
-      admin_mask_email(u.email) as masked_email,
+      coalesce(admin_mask_email(u.email), '(알 수 없음)') as masked_email,
       s.job_role,
       s.created_at,
       r.overall_score,
       (r.id is not null) as is_completed,
       (s.deleted_at is not null) as is_deleted
     from interview_sessions s
-    join auth.users u on u.id = s.user_id
+    left join auth.users u on u.id = s.user_id
     left join interview_reports r on r.session_id = s.id
     order by s.created_at desc
     limit 500

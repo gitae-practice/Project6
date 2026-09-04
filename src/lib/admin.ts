@@ -11,11 +11,20 @@ export const ADMIN_EMAIL = "admin@admin.com";
 
 // 스탯 카드 하나의 값 — "지금 값"과 "1일/7일/1개월 전 시점 기준 값"을 같이 받아서
 // 프론트의 일/주/월 토글에 따라 증감률을 계산한다 (비교 대상 값 자체는 DB 함수가 이미 같은 기준으로 계산해둠).
+// "총 가입자/총 세션" 같은 누적(스톡) 지표에 쓴다 — 지금 값 하나에 비교 시점만 여러 개다.
 export interface AdminStatWithTrend {
   value: number | null;
   day: number | null;
   week: number | null;
   month: number | null;
+}
+
+// "신규 가입자"처럼 애초에 "어떤 기간 동안 새로 생긴 수"인 플로우 지표용 — 스톡 지표와 달리
+// 값 자체가 일/주/월에 따라 달라지므로(오늘 vs 이번 주 vs 이번 달), 기간별로 값+비교값 쌍을 통째로 갖는다.
+export interface AdminFlowStat {
+  day: { value: number | null; previous: number | null };
+  week: { value: number | null; previous: number | null };
+  month: { value: number | null; previous: number | null };
 }
 
 // 개요 탭 상단의 "일 / 주 / 월" 토글이 고르는 비교 기준.
@@ -27,24 +36,34 @@ export interface AdminDashboardStats {
   completed_interviews: AdminStatWithTrend;
   average_score: AdminStatWithTrend;
   in_progress_sessions: AdminStatWithTrend;
-  new_users_today: AdminStatWithTrend;
+  new_users: AdminFlowStat;
   top_job_roles: { job_role: string; count: number }[];
   sessions_last_7_days: { date: string; count: number }[];
   score_distribution: { range: string; count: number }[];
 }
 
-// 스탯 카드 하단의 증감 문구 + 화살표 방향을 선택된 기간(일/주/월) 기준으로 계산한다.
-// 비교할 이전 값이 없거나(null) 이전 값이 0이면 퍼센트를 정의할 수 없고, 값이 있어도 변화가
-// 0%로 반올림되면 의미 있는 증감이 아니므로 두 경우 다 "변동없음"으로 표시한다 (화살표 없음).
-export function computeStatTrend(
-  stat: AdminStatWithTrend,
-  period: TrendPeriod
-): { text: string; direction: "up" | "down" | "none" } {
-  const previous = stat[period];
-  if (stat.value == null || previous == null || previous === 0) {
+// 증감 문구 + 화살표 방향을 계산하는 실제 로직 — {value, previous} 한 쌍만 받으면 되므로
+// 스톡 지표(computeStatTrend)와 플로우 지표(computeFlowTrend) 둘 다 이걸 공유한다.
+// - 비교할 이전 값이 없으면(null) 비교 자체가 불가능하므로 "변동없음"
+// - 값 차이가 0이면(또는 퍼센트가 0으로 반올림되면) 의미 있는 증감이 아니므로 "변동없음"
+// - 이전 값이 0인데 지금 값이 0보다 크면(예: 0명 → 1명) 퍼센트로 표현할 수 없으니
+//   ("0에서 몇 % 늘었다"는 말은 성립하지 않음) 대신 늘어난 절대량을 그대로 보여준다.
+function computeTrendFromPair(pair: {
+  value: number | null;
+  previous: number | null;
+}): { text: string; direction: "up" | "down" | "none" } {
+  if (pair.value == null || pair.previous == null) {
     return { text: "변동없음", direction: "none" };
   }
-  const percent = Math.round(((stat.value - previous) / previous) * 100);
+  const diff = pair.value - pair.previous;
+  if (diff === 0) {
+    return { text: "변동없음", direction: "none" };
+  }
+  if (pair.previous === 0) {
+    const formatted = Number.isInteger(diff) ? `${diff}` : diff.toFixed(1);
+    return { text: `+${formatted}`, direction: "up" };
+  }
+  const percent = Math.round((diff / pair.previous) * 100);
   if (percent === 0) {
     return { text: "변동없음", direction: "none" };
   }
@@ -52,6 +71,20 @@ export function computeStatTrend(
     text: `${percent > 0 ? "+" : ""}${percent}%`,
     direction: percent > 0 ? "up" : "down",
   };
+}
+
+export function computeStatTrend(
+  stat: AdminStatWithTrend,
+  period: TrendPeriod
+): { text: string; direction: "up" | "down" | "none" } {
+  return computeTrendFromPair({ value: stat.value, previous: stat[period] });
+}
+
+export function computeFlowTrend(
+  stat: AdminFlowStat,
+  period: TrendPeriod
+): { text: string; direction: "up" | "down" | "none" } {
+  return computeTrendFromPair(stat[period]);
 }
 
 export interface AdminUserRow {
