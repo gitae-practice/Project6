@@ -108,6 +108,12 @@ export function SessionsTable({ sessions, isLoading, error, onSelectSession }: S
                     >
                       {s.is_completed ? "완료" : "진행 중"}
                     </span>
+                    {/* 유저가 소프트 삭제한 세션 — 관리자에게는 그대로 보이되 구분 표시만 한다 */}
+                    {s.is_deleted && (
+                      <span className="ml-1 rounded-full bg-border px-2 py-0.5 text-xs text-muted">
+                        유저가 삭제함
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

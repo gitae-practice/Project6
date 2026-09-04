@@ -8,7 +8,8 @@ create table if not exists interview_sessions (
   job_role text, -- 지원 직무 (필수 입력)
   resume_content text, -- 이력서 내용: 직접 입력 또는 PDF 업로드 시 Claude가 추출한 원문 (필수 - 둘 중 하나)
   portfolio_content text, -- 포트폴리오 PDF 업로드 시 Claude가 추출한 원문 (선택 입력)
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz -- null이면 정상, 값이 있으면 유저가 삭제한 것 (소프트 삭제 — 관리자 통계가 삭제 시점과 무관하게 정확히 집계되도록 실제로 행을 지우지 않는다)
 );
 
 -- 이미 만들어진 테이블에 새 컬럼을 추가하는 경우를 위한 안전한 재실행용 구문
@@ -16,6 +17,7 @@ alter table interview_sessions add column if not exists job_role text;
 alter table interview_sessions add column if not exists resume_content text;
 alter table interview_sessions add column if not exists portfolio_content text;
 alter table interview_sessions add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table interview_sessions add column if not exists deleted_at timestamptz;
 
 -- 세션 안의 개별 메시지 (사용자 답변 / 면접관 질문·피드백)
 create table if not exists interview_messages (
@@ -373,6 +375,8 @@ $$;
 grant execute on function admin_list_users() to authenticated;
 
 -- 전체 세션 목록 — 이메일은 마스킹, user_id는 화면에는 안 보이지만 유저별 필터링용으로 같이 내려준다.
+-- 유저가 소프트 삭제한(deleted_at 있는) 세션도 관리자에게는 그대로 보여주고 is_deleted로 표시만 한다
+-- (유저 화면에서만 숨겨야 하는 것이지, 관리자 감사 목적으로는 삭제 여부와 무관하게 볼 수 있어야 함).
 create or replace function admin_list_sessions()
 returns jsonb
 language plpgsql
@@ -396,7 +400,8 @@ begin
       s.job_role,
       s.created_at,
       r.overall_score,
-      (r.id is not null) as is_completed
+      (r.id is not null) as is_completed,
+      (s.deleted_at is not null) as is_deleted
     from interview_sessions s
     join auth.users u on u.id = s.user_id
     left join interview_reports r on r.session_id = s.id

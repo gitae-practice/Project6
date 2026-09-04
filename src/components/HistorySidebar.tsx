@@ -30,15 +30,18 @@ export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) 
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // interview_messages/interview_reports는 session_id에 on delete cascade가 걸려 있어
-  // interview_sessions 한 행만 지우면 관련 메시지·리포트까지 DB에서 함께 정리된다.
-  // RLS(delete_own_sessions)가 본인 세션만 삭제 가능하게 막아준다.
+  // 실제로 행을 지우지 않고 deleted_at만 채우는 소프트 삭제 — 관리자 통계(일/주/월 증감)가
+  // 삭제 시점과 무관하게 정확히 집계되려면 과거에 존재했던 세션 기록 자체는 남아있어야 한다.
+  // RLS(update_own_sessions)가 본인 세션만 수정 가능하게 막아준다.
   async function handleDelete(id: string, href: string) {
     if (!window.confirm("이 면접 기록을 삭제할까요? 삭제하면 되돌릴 수 없습니다.")) return;
 
     setDeletingId(id);
     const supabase = createClient();
-    const { error } = await supabase.from("interview_sessions").delete().eq("id", id);
+    const { error } = await supabase
+      .from("interview_sessions")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
     setDeletingId(null);
 
     if (error) {

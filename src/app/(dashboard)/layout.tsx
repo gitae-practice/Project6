@@ -29,10 +29,12 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     redirect("/admin");
   }
 
-  // 완료된(리포트가 있는) 지난 세션만 사이드바에 보여준다.
+  // 완료된(리포트가 있는) 지난 세션만 사이드바에 보여준다. 유저가 소프트 삭제한 세션은
+  // deleted_at이 채워져 있을 뿐 DB에는 남아있으므로(관리자 통계용) 여기서 명시적으로 제외한다.
   const { data: sessions } = await supabase
     .from("interview_sessions")
     .select("id, job_role, created_at, interview_reports(overall_score)")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   const sidebarItems: HistorySidebarItem[] = (sessions ?? [])

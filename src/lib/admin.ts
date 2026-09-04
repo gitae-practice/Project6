@@ -71,6 +71,7 @@ export interface AdminSessionRow {
   created_at: string;
   overall_score: number | null;
   is_completed: boolean;
+  is_deleted: boolean; // 유저가 소프트 삭제한 세션 — 관리자에게는 그대로 보이되 표시만 다르게 함
 }
 
 export interface AdminSessionDetail {

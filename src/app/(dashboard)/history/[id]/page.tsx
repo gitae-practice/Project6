@@ -14,6 +14,7 @@ export default async function HistoryDetailPage(props: PageProps<"/history/[id]"
     .from("interview_sessions")
     .select("id, job_role, created_at, interview_reports(*)")
     .eq("id", id)
+    .is("deleted_at", null) // 소프트 삭제된 세션은 유저 화면에서는 없는 것처럼 취급한다
     .single();
 
   const reportRow = Array.isArray(session?.interview_reports)
@@ -21,7 +22,7 @@ export default async function HistoryDetailPage(props: PageProps<"/history/[id]"
     : session?.interview_reports;
 
   if (!session || !reportRow) {
-    notFound(); // 본인 세션이 아니거나(RLS로 아예 안 보임) 아직 리포트가 없는 경우
+    notFound(); // 본인 세션이 아니거나(RLS로 아예 안 보임), 삭제됐거나, 아직 리포트가 없는 경우
   }
 
   const report: InterviewReport = {
