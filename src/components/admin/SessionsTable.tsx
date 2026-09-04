@@ -42,9 +42,9 @@ export function SessionsTable({ sessions, isLoading, error, onSelectSession }: S
 
   return (
     <div className="flex flex-col gap-3">
-      {/* 필터 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border p-0.5 text-xs">
+      {/* 필터 — 모바일에서는 완료 토글과 날짜 범위를 세로로 쌓고, sm 이상에서는 한 줄로 배치한다 */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex w-fit rounded-lg border border-border p-0.5 text-xs">
           {COMPLETION_FILTERS.map(({ key, label }) => (
             <button
               key={key}
@@ -58,19 +58,21 @@ export function SessionsTable({ sessions, isLoading, error, onSelectSession }: S
             </button>
           ))}
         </div>
-        <input
-          type="date"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          className="rounded-lg border border-border bg-white/6 px-2 py-1.5 text-xs outline-none focus:border-accent"
-        />
-        <span className="text-xs text-muted">~</span>
-        <input
-          type="date"
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          className="rounded-lg border border-border bg-white/6 px-2 py-1.5 text-xs outline-none focus:border-accent"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-white/6 px-2 py-1.5 text-xs outline-none focus:border-accent sm:flex-none"
+          />
+          <span className="shrink-0 text-xs text-muted">~</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-white/6 px-2 py-1.5 text-xs outline-none focus:border-accent sm:flex-none"
+          />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
