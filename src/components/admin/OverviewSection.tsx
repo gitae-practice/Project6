@@ -1,9 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import { Users, MessagesSquare, ClipboardCheck, Star, Clock, UserPlus } from "lucide-react";
-import { computeStatTrend, type AdminDashboardStats, type AdminStatWithTrend } from "@/lib/admin";
+import { computeStatTrend, type AdminDashboardStats, type AdminStatWithTrend, type TrendPeriod } from "@/lib/admin";
+
+const PERIOD_OPTIONS: { key: TrendPeriod; label: string }[] = [
+  { key: "day", label: "일" },
+  { key: "week", label: "주" },
+  { key: "month", label: "월" },
+];
 
 // 개요 탭 — 요약 지표 카드 + 인기 직무/7일 추이/점수 분포 막대그래프.
 // 전부 admin_dashboard_stats() 하나가 미리 집계해서 준 숫자만 그린다 (개인정보 없음).
 export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
+  const [period, setPeriod] = useState<TrendPeriod>("day");
+
   const maxJobRoleCount = Math.max(1, ...stats.top_job_roles.map((r) => r.count));
   const maxDailyCount = Math.max(1, ...stats.sessions_last_7_days.map((d) => d.count));
   const maxScoreCount = Math.max(1, ...stats.score_distribution.map((s) => s.count));
@@ -25,10 +36,28 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 요약 지표 6개 — 각 카드 하단에 전주 대비 증감률 표시 */}
+      {/* 개요 탭 상단 우측 — 스탯 카드 증감률의 비교 기준(일/주/월) 토글 */}
+      <div className="flex justify-end">
+        <div className="flex w-fit rounded-lg border border-border p-0.5 text-xs">
+          {PERIOD_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPeriod(key)}
+              className={`rounded-md px-3 py-1.5 transition-colors ${
+                period === key ? "bg-accent text-white" : "text-muted hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 요약 지표 6개 — 각 카드 하단에 선택된 기간 기준 증감 표시 */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
         {statCards.map(({ label, stat, icon: Icon, accent, isScore }) => {
-          const trend = computeStatTrend(stat);
+          const trend = computeStatTrend(stat, period);
           return (
             <div key={label} className="glass-card flex flex-col gap-2 rounded-xl p-4">
               <Icon className={`h-4 w-4 ${accent}`} />

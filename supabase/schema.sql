@@ -138,50 +138,86 @@ set search_path = public, auth
 as $$
 declare
   result jsonb;
+  day_ago timestamptz := now() - interval '1 day';
   week_ago timestamptz := now() - interval '7 days';
+  month_ago timestamptz := now() - interval '1 month';
+
   v_total_users bigint;
-  v_total_users_prev bigint;
+  v_total_users_day bigint;
+  v_total_users_week bigint;
+  v_total_users_month bigint;
+
   v_total_sessions bigint;
-  v_total_sessions_prev bigint;
+  v_total_sessions_day bigint;
+  v_total_sessions_week bigint;
+  v_total_sessions_month bigint;
+
   v_completed bigint;
-  v_completed_prev bigint;
+  v_completed_day bigint;
+  v_completed_week bigint;
+  v_completed_month bigint;
+
   v_in_progress bigint;
-  v_in_progress_prev bigint;
+  v_in_progress_day bigint;
+  v_in_progress_week bigint;
+  v_in_progress_month bigint;
+
   v_new_today bigint;
-  v_new_prev bigint;
+  v_new_day bigint; -- 어제 신규 가입자
+  v_new_week bigint; -- 지난주 같은 요일 신규 가입자
+  v_new_month bigint; -- 지난달 같은 날짜 신규 가입자
+
   v_avg_score numeric;
-  v_avg_score_prev numeric;
+  v_avg_score_day numeric;
+  v_avg_score_week numeric;
+  v_avg_score_month numeric;
 begin
   if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
     raise exception '관리자만 조회할 수 있습니다.';
   end if;
 
-  -- 스탯 카드마다 "지금 값"과 "7일 전 시점 기준으로 같은 방식으로 계산한 값"을 같이 구해서
-  -- 프론트에서 증감률(전주 대비 +N%)을 계산할 수 있게 한다.
+  -- 스탯 카드마다 "지금 값"과 "1일/7일/1개월 전 시점 기준으로 같은 방식으로 계산한 값"을 같이
+  -- 구해서, 프론트의 일/주/월 토글에 따라 증감률을 계산할 수 있게 한다.
   select count(*) into v_total_users from auth.users;
-  select count(*) into v_total_users_prev from auth.users where created_at <= week_ago;
+  select count(*) into v_total_users_day from auth.users where created_at <= day_ago;
+  select count(*) into v_total_users_week from auth.users where created_at <= week_ago;
+  select count(*) into v_total_users_month from auth.users where created_at <= month_ago;
 
   select count(*) into v_total_sessions from interview_sessions;
-  select count(*) into v_total_sessions_prev from interview_sessions where created_at <= week_ago;
+  select count(*) into v_total_sessions_day from interview_sessions where created_at <= day_ago;
+  select count(*) into v_total_sessions_week from interview_sessions where created_at <= week_ago;
+  select count(*) into v_total_sessions_month from interview_sessions where created_at <= month_ago;
 
   select count(*) into v_completed from interview_reports;
-  select count(*) into v_completed_prev from interview_reports where created_at <= week_ago;
+  select count(*) into v_completed_day from interview_reports where created_at <= day_ago;
+  select count(*) into v_completed_week from interview_reports where created_at <= week_ago;
+  select count(*) into v_completed_month from interview_reports where created_at <= month_ago;
 
   -- 진행 중 = 세션은 만들어졌지만 아직 리포트가 없는 경우. 별도 status 컬럼 없이 판단한다.
   select count(*) into v_in_progress
   from interview_sessions s
   where not exists (select 1 from interview_reports r where r.session_id = s.id);
 
-  -- "7일 전 시점의 진행 중"은, 그 시점까지 만들어졌는데 그 시점까지는 아직 리포트가 없었던 세션 수.
-  select count(*) into v_in_progress_prev
+  -- "N 전 시점의 진행 중"은, 그 시점까지 만들어졌는데 그 시점까지는 아직 리포트가 없었던 세션 수.
+  select count(*) into v_in_progress_day
+  from interview_sessions s
+  where s.created_at <= day_ago
+    and not exists (select 1 from interview_reports r where r.session_id = s.id and r.created_at <= day_ago);
+
+  select count(*) into v_in_progress_week
   from interview_sessions s
   where s.created_at <= week_ago
-    and not exists (
-      select 1 from interview_reports r where r.session_id = s.id and r.created_at <= week_ago
-    );
+    and not exists (select 1 from interview_reports r where r.session_id = s.id and r.created_at <= week_ago);
+
+  select count(*) into v_in_progress_month
+  from interview_sessions s
+  where s.created_at <= month_ago
+    and not exists (select 1 from interview_reports r where r.session_id = s.id and r.created_at <= month_ago);
 
   select count(*) into v_new_today from auth.users where created_at::date = current_date;
-  select count(*) into v_new_prev from auth.users where created_at::date = (current_date - 7);
+  select count(*) into v_new_day from auth.users where created_at::date = (current_date - 1);
+  select count(*) into v_new_week from auth.users where created_at::date = (current_date - 7);
+  select count(*) into v_new_month from auth.users where created_at::date = (current_date - interval '1 month')::date;
 
   -- 평균 점수 = "전체 면접의 평균"이 아니라 "유저별 평균의 평균" — 유저 한 명 한 명이 동일한
   -- 비중을 갖도록 한 번 더 평균낸다 (면접을 많이/적게 본 유저가 전체 평균을 과도하게 끌지 않게).
@@ -193,24 +229,51 @@ begin
     group by s.user_id
   ) t;
 
-  select avg(user_avg) into v_avg_score_prev
+  select avg(user_avg) into v_avg_score_day
   from (
     select avg(r.overall_score) as user_avg
-    from interview_sessions s
-    join interview_reports r on r.session_id = s.id
+    from interview_sessions s join interview_reports r on r.session_id = s.id
+    where r.created_at <= day_ago
+    group by s.user_id
+  ) t;
+
+  select avg(user_avg) into v_avg_score_week
+  from (
+    select avg(r.overall_score) as user_avg
+    from interview_sessions s join interview_reports r on r.session_id = s.id
     where r.created_at <= week_ago
     group by s.user_id
   ) t;
 
+  select avg(user_avg) into v_avg_score_month
+  from (
+    select avg(r.overall_score) as user_avg
+    from interview_sessions s join interview_reports r on r.session_id = s.id
+    where r.created_at <= month_ago
+    group by s.user_id
+  ) t;
+
   select jsonb_build_object(
-    'total_users', jsonb_build_object('value', v_total_users, 'previous', v_total_users_prev),
-    'total_sessions', jsonb_build_object('value', v_total_sessions, 'previous', v_total_sessions_prev),
-    'completed_interviews', jsonb_build_object('value', v_completed, 'previous', v_completed_prev),
-    'in_progress_sessions', jsonb_build_object('value', v_in_progress, 'previous', v_in_progress_prev),
-    'new_users_today', jsonb_build_object('value', v_new_today, 'previous', v_new_prev),
+    'total_users', jsonb_build_object(
+      'value', v_total_users, 'day', v_total_users_day, 'week', v_total_users_week, 'month', v_total_users_month
+    ),
+    'total_sessions', jsonb_build_object(
+      'value', v_total_sessions, 'day', v_total_sessions_day, 'week', v_total_sessions_week, 'month', v_total_sessions_month
+    ),
+    'completed_interviews', jsonb_build_object(
+      'value', v_completed, 'day', v_completed_day, 'week', v_completed_week, 'month', v_completed_month
+    ),
+    'in_progress_sessions', jsonb_build_object(
+      'value', v_in_progress, 'day', v_in_progress_day, 'week', v_in_progress_week, 'month', v_in_progress_month
+    ),
+    'new_users_today', jsonb_build_object(
+      'value', v_new_today, 'day', v_new_day, 'week', v_new_week, 'month', v_new_month
+    ),
     'average_score', jsonb_build_object(
       'value', round(v_avg_score::numeric, 1),
-      'previous', round(v_avg_score_prev::numeric, 1)
+      'day', round(v_avg_score_day::numeric, 1),
+      'week', round(v_avg_score_week::numeric, 1),
+      'month', round(v_avg_score_month::numeric, 1)
     ),
     'top_job_roles', (
       select coalesce(jsonb_agg(jsonb_build_object('job_role', job_role, 'count', cnt)), '[]'::jsonb)

@@ -9,12 +9,17 @@ export const ADMIN_EMAIL = "admin@admin.com";
 // 아래 타입들은 supabase.rpc(...)로 호출하는 admin_* DB 함수들의 반환 모양과 1:1로 맞춘다.
 // (schema.sql 참고 — 개별 유저 이메일은 DB 함수 안에서 이미 마스킹된 채로 내려온다)
 
-// 스탯 카드 하나의 값 — "지금 값"과 "7일 전 시점 기준 값"을 같이 받아서
-// 프론트에서 전주 대비 증감률을 계산한다 (계산 자체는 DB 함수가 이미 같은 기준으로 해둔 값을 그대로 뺄셈만 함).
+// 스탯 카드 하나의 값 — "지금 값"과 "1일/7일/1개월 전 시점 기준 값"을 같이 받아서
+// 프론트의 일/주/월 토글에 따라 증감률을 계산한다 (비교 대상 값 자체는 DB 함수가 이미 같은 기준으로 계산해둠).
 export interface AdminStatWithTrend {
   value: number | null;
-  previous: number | null;
+  day: number | null;
+  week: number | null;
+  month: number | null;
 }
+
+// 개요 탭 상단의 "일 / 주 / 월" 토글이 고르는 비교 기준.
+export type TrendPeriod = "day" | "week" | "month";
 
 export interface AdminDashboardStats {
   total_users: AdminStatWithTrend;
@@ -28,22 +33,23 @@ export interface AdminDashboardStats {
   score_distribution: { range: string; count: number }[];
 }
 
-// 스탯 카드 하단의 "전주 대비 +N%" 문구 + 화살표 방향을 계산한다.
-// 비교할 이전 값이 없거나(null) 이전 값이 0이면 퍼센트를 정의할 수 없으니 "전주 대비 -"로 표시하고,
-// 값 자체는 있지만 변화가 0%로 반올림되면 "전주 대비 0%"로 표시한다 (둘 다 화살표는 안 보여줌).
-export function computeStatTrend(stat: AdminStatWithTrend): {
-  text: string;
-  direction: "up" | "down" | "none";
-} {
-  if (stat.value == null || stat.previous == null || stat.previous === 0) {
-    return { text: "전주 대비 -", direction: "none" };
+// 스탯 카드 하단의 증감 문구 + 화살표 방향을 선택된 기간(일/주/월) 기준으로 계산한다.
+// 비교할 이전 값이 없거나(null) 이전 값이 0이면 퍼센트를 정의할 수 없고, 값이 있어도 변화가
+// 0%로 반올림되면 의미 있는 증감이 아니므로 두 경우 다 "변동없음"으로 표시한다 (화살표 없음).
+export function computeStatTrend(
+  stat: AdminStatWithTrend,
+  period: TrendPeriod
+): { text: string; direction: "up" | "down" | "none" } {
+  const previous = stat[period];
+  if (stat.value == null || previous == null || previous === 0) {
+    return { text: "변동없음", direction: "none" };
   }
-  const percent = Math.round(((stat.value - stat.previous) / stat.previous) * 100);
+  const percent = Math.round(((stat.value - previous) / previous) * 100);
   if (percent === 0) {
-    return { text: "전주 대비 0%", direction: "none" };
+    return { text: "변동없음", direction: "none" };
   }
   return {
-    text: `전주 대비 ${percent > 0 ? "+" : ""}${percent}%`,
+    text: `${percent > 0 ? "+" : ""}${percent}%`,
     direction: percent > 0 ? "up" : "down",
   };
 }
