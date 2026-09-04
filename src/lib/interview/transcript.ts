@@ -17,3 +17,15 @@ const KICKOFF_PREFIX = "면접을 시작해주세요";
 export function isKickoffTurn(turn: ChatTurn): boolean {
   return turn.role === "user" && turn.content.startsWith(KICKOFF_PREFIX);
 }
+
+// DB에서 온 평평한 메시지 목록(세션당 하나의 배열)을 InterviewTranscript가 기대하는
+// 역할별 묶음으로 바꾼다. history/[id] 상세 페이지와 관리자 세션 상세 모달이 공유한다.
+export function groupMessagesByRole(
+  messages: { interviewer_role: InterviewerRole; sender: "user" | "assistant"; content: string }[]
+): HistoryByRole {
+  const history: HistoryByRole = { technical: [], personality: [], pressure: [] };
+  for (const m of messages) {
+    history[m.interviewer_role].push({ role: m.sender, content: m.content });
+  }
+  return history;
+}

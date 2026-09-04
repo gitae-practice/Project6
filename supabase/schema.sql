@@ -148,6 +148,12 @@ begin
     'total_sessions', (select count(*) from interview_sessions),
     'completed_interviews', (select count(*) from interview_reports),
     'average_score', (select round(avg(overall_score)::numeric, 1) from interview_reports),
+    -- 진행 중 = 세션은 만들어졌지만 아직 리포트가 없는 경우. 별도 status 컬럼 없이 판단한다.
+    'in_progress_sessions', (
+      select count(*) from interview_sessions s
+      where not exists (select 1 from interview_reports r where r.session_id = s.id)
+    ),
+    'new_users_today', (select count(*) from auth.users where created_at::date = current_date),
     'top_job_roles', (
       select coalesce(jsonb_agg(jsonb_build_object('job_role', job_role, 'count', cnt)), '[]'::jsonb)
       from (
@@ -168,6 +174,26 @@ begin
         group by gs
         order by gs
       ) t
+    ),
+    -- 점수 구간은 데이터가 없는 구간도 0건으로 항상 5개 다 나오게 고정 목록에 왼쪽 조인한다.
+    'score_distribution', (
+      select jsonb_agg(jsonb_build_object('range', b.range, 'count', coalesce(c.cnt, 0)) order by b.ord)
+      from (
+        select * from (values ('0-2', 1), ('3-4', 2), ('5-6', 3), ('7-8', 4), ('9-10', 5)) as v(range, ord)
+      ) b
+      left join (
+        select
+          case
+            when overall_score <= 2 then '0-2'
+            when overall_score <= 4 then '3-4'
+            when overall_score <= 6 then '5-6'
+            when overall_score <= 8 then '7-8'
+            else '9-10'
+          end as range,
+          count(*) as cnt
+        from interview_reports
+        group by 1
+      ) c on c.range = b.range
     )
   ) into result;
 
@@ -177,3 +203,145 @@ $$;
 
 -- 로그인한 사용자면 누구나 호출은 가능하지만, 함수 안에서 admin 이메일이 아니면 예외를 던진다.
 grant execute on function admin_dashboard_stats() to authenticated;
+
+-- 이메일을 앞 3글자 + *** + 도메인만 남기고 마스킹한다 (예: abc***@gmail.com).
+-- 관리자 화면이라도 개별 유저 이메일 전체를 그대로 노출하지 않기 위해 DB 함수 안에서부터 가공한다.
+create or replace function admin_mask_email(raw_email text)
+returns text
+language sql
+immutable
+as $$
+  select left(split_part(raw_email, '@', 1), 3) || '***@' || split_part(raw_email, '@', 2);
+$$;
+
+-- 유저별 요약 목록 — 이메일은 마스킹, 세션 통계만 집계해서 준다.
+create or replace function admin_list_users()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  result jsonb;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
+    raise exception '관리자만 조회할 수 있습니다.';
+  end if;
+
+  select coalesce(jsonb_agg(row_data order by last_session_at desc nulls last), '[]'::jsonb)
+  into result
+  from (
+    select
+      u.id as user_id,
+      admin_mask_email(u.email) as masked_email,
+      u.created_at as joined_at,
+      count(s.id) as total_sessions,
+      max(s.created_at) as last_session_at,
+      round(avg(r.overall_score)::numeric, 1) as average_score
+    from auth.users u
+    left join interview_sessions s on s.user_id = u.id
+    left join interview_reports r on r.session_id = s.id
+    where u.email is distinct from 'admin@admin.com' -- 관리자 본인은 목록에서 제외
+    group by u.id, u.email, u.created_at
+  ) row_data;
+
+  return result;
+end;
+$$;
+
+grant execute on function admin_list_users() to authenticated;
+
+-- 전체 세션 목록 — 이메일은 마스킹, user_id는 화면에는 안 보이지만 유저별 필터링용으로 같이 내려준다.
+create or replace function admin_list_sessions()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  result jsonb;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
+    raise exception '관리자만 조회할 수 있습니다.';
+  end if;
+
+  select coalesce(jsonb_agg(row_data order by created_at desc), '[]'::jsonb)
+  into result
+  from (
+    select
+      s.id as session_id,
+      s.user_id,
+      admin_mask_email(u.email) as masked_email,
+      s.job_role,
+      s.created_at,
+      r.overall_score,
+      (r.id is not null) as is_completed
+    from interview_sessions s
+    join auth.users u on u.id = s.user_id
+    left join interview_reports r on r.session_id = s.id
+    order by s.created_at desc
+    limit 500
+  ) row_data;
+
+  return result;
+end;
+$$;
+
+grant execute on function admin_list_sessions() to authenticated;
+
+-- 세션 하나의 전체 상세(리포트 + 대화 전문) — 유저 모달/세션 모달 둘 다 이 함수 하나로 처리한다.
+create or replace function admin_get_session_detail(target_session_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  result jsonb;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
+    raise exception '관리자만 조회할 수 있습니다.';
+  end if;
+
+  select jsonb_build_object(
+    'session_id', s.id,
+    'masked_email', admin_mask_email(u.email),
+    'job_role', s.job_role,
+    'created_at', s.created_at,
+    'report', (
+      select jsonb_build_object(
+        'overall_score', r.overall_score,
+        'summary', r.summary,
+        'interviewer_feedback', r.interviewer_feedback,
+        'strengths', r.strengths,
+        'improvements', r.improvements
+      )
+      from interview_reports r
+      where r.session_id = s.id
+    ),
+    'messages', (
+      select coalesce(
+        jsonb_agg(
+          jsonb_build_object('interviewer_role', m.interviewer_role, 'sender', m.sender, 'content', m.content)
+          order by m.created_at
+        ),
+        '[]'::jsonb
+      )
+      from interview_messages m
+      where m.session_id = s.id
+    )
+  )
+  into result
+  from interview_sessions s
+  join auth.users u on u.id = s.user_id
+  where s.id = target_session_id;
+
+  if result is null then
+    raise exception '세션을 찾을 수 없습니다.';
+  end if;
+
+  return result;
+end;
+$$;
+
+grant execute on function admin_get_session_detail(uuid) to authenticated;

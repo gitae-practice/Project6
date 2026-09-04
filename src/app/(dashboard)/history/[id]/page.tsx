@@ -3,15 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { ReportCard } from "@/components/ReportCard";
 import { PdfExportSection } from "@/components/PdfExportSection";
 import { InterviewTranscript } from "@/components/InterviewTranscript";
-import type { InterviewerRole } from "@/lib/interview/roles";
 import type { InterviewReport } from "@/lib/interview/report";
-import type { HistoryByRole } from "@/lib/interview/transcript";
-
-interface MessageRow {
-  interviewer_role: InterviewerRole;
-  sender: "user" | "assistant";
-  content: string;
-}
+import { groupMessagesByRole } from "@/lib/interview/transcript";
 
 export default async function HistoryDetailPage(props: PageProps<"/history/[id]">) {
   const { id } = await props.params;
@@ -45,11 +38,7 @@ export default async function HistoryDetailPage(props: PageProps<"/history/[id]"
     .eq("session_id", id)
     .order("created_at", { ascending: true });
 
-  // DB에서 온 평평한 메시지 목록을 InterviewTranscript가 기대하는 역할별 묶음으로 변환한다.
-  const history: HistoryByRole = { technical: [], personality: [], pressure: [] };
-  for (const row of (messages as MessageRow[] | null) ?? []) {
-    history[row.interviewer_role].push({ role: row.sender, content: row.content });
-  }
+  const history = groupMessagesByRole(messages ?? []);
 
   const date = new Date(session.created_at).toLocaleDateString("ko-KR", {
     year: "numeric",
