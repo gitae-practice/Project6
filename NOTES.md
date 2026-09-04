@@ -2,6 +2,15 @@
 
 ## 완료된 작업
 
+### 2026-08-31 (계속 3)
+- **관리자 페이지 — 사용 통계 대시보드**
+  - 처음 구상했던 "전체 유저 계정/개인정보 열람" 대신, 개인정보 없이 숫자만 다루는 통계 대시보드로 방향 전환 (사용자 피드백 반영)
+  - Postgres 함수 `admin_dashboard_stats()`를 `security definer`로 만들어 RLS를 우회해 전체 집계를 계산하되, 함수 안에서 호출자 이메일이 `admin@admin.com`인지 직접 확인 — 이 방식 덕분에 **Supabase service_role 키가 앱 코드에 전혀 필요 없어짐** (기존 계획의 가장 큰 걸림돌이었던 부분 해소)
+  - 반환값도 개별 유저 정보 없이 총 가입자 수/총 세션 수/완료된 면접 수/평균 점수/인기 지원 직무 TOP 5/최근 7일 일별 추이만 집계해서 줌
+  - `/admin` 페이지 신규 — `user.email === 'admin@admin.com'` 아니면 `/`로 리다이렉트, 통과하면 `supabase.rpc('admin_dashboard_stats')` 호출해 대시보드 렌더링 (스탯 카드 4개 + 인기 직무 막대그래프 + 7일 추이 막대그래프, 차트 라이브러리 없이 순수 CSS로 구현)
+  - 관리자 계정은 코드로 생성하지 않고 Supabase 대시보드(Authentication → Users → Add user, Auto Confirm 체크)에서 직접 생성하는 방식으로 안내 — 이 역시 service_role 키 불필요
+  - tsc/lint/build 전부 통과 확인 (비로그인 상태 `/admin` 접근 시 307 리다이렉트 curl로 검증)
+
 ### 2026-08-31 (계속 2)
 - **포트폴리오 PDF 업로드 추가** (선택 사항)
   - `interview_sessions`에 `portfolio_content` 컬럼 추가 — **schema.sql 재실행 필요**
@@ -133,11 +142,8 @@
 
 ## 다음 할 일
 
-- **관리자 페이지** — 전체 유저 계정 정보 + 사용 내역(면접 세션/리포트) 열람·삭제
-  - 계정: `admin@admin.com` / `admin1234` (실제 메일 못 받는 주소라 service_role 키로 이메일 인증 없이 직접 생성 예정)
-  - 전체 유저 데이터 조회는 RLS를 우회해야 해서 Supabase **service_role 키**가 필요함 (대시보드 → Settings → API → service_role secret) — 어떻게 전달할지는 다음 세션에서 다시 확인
-  - `/admin` 라우트를 만들어 `user.email === 'admin@admin.com'`인 경우만 접근 허용, 그 외에는 리다이렉트
-  - 화면 구성(안): 유저 목록(이메일/이름/가입일/완료한 면접 수) + 계정 삭제(cascade로 세션/메시지/리포트까지 자동 정리) / 유저별 세션 목록(직무/날짜/점수) + 세션 단위 삭제 / 세션 상세(리포트+대화 전문) 열람
+- **관리자 페이지 후속 기능 (선택)** — 사용 통계 대시보드는 완료됨. 필요하면 다음 중에서 추가로 선택 가능: Claude API 사용량/비용 모니터링, 면접관 프롬프트를 DB로 옮겨 관리자가 직접 수정, 시스템 상태(DB 연결/에러 로그) 확인
+  - 계정 정보: `admin@admin.com` / `admin1234` (Supabase 대시보드에서 Auto Confirm으로 직접 생성 완료 필요 — 아직 안 만들었다면 로그인 전 이 계정부터 생성)
 - STT/TTS 음성 입출력 (Web Speech API, 브라우저 무료, Chrome/Edge만 안정적)
   - STT(`SpeechRecognition`): 음성 답변 → 입력창 텍스트 자동 변환
   - TTS(`SpeechSynthesis`): 면접관 질문 음성으로 읽어주기

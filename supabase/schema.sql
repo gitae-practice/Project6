@@ -122,3 +122,58 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete on interview_sessions to authenticated;
 grant select, insert, update, delete on interview_messages to authenticated;
 grant select, insert, update, delete on interview_reports to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────
+-- 관리자 대시보드용 집계 함수
+-- ────────────────────────────────────────────────────────────────────────
+-- security definer로 만들어서 RLS를 우회해 전체 유저/세션을 집계할 수 있게 하되,
+-- 개별 유저의 이메일·이름 같은 개인정보는 절대 반환하지 않고 숫자로 집계된 결과만 돌려준다.
+-- 관리자 계정 여부는 함수 안에서 직접 확인한다 — 이 방식이면 앱 코드(Next.js)에
+-- Supabase service_role 키를 전혀 두지 않아도 되고, 관리자 판별 로직도 DB 한 곳에만 존재한다.
+create or replace function admin_dashboard_stats()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  result jsonb;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
+    raise exception '관리자만 조회할 수 있습니다.';
+  end if;
+
+  select jsonb_build_object(
+    'total_users', (select count(*) from auth.users),
+    'total_sessions', (select count(*) from interview_sessions),
+    'completed_interviews', (select count(*) from interview_reports),
+    'average_score', (select round(avg(overall_score)::numeric, 1) from interview_reports),
+    'top_job_roles', (
+      select coalesce(jsonb_agg(jsonb_build_object('job_role', job_role, 'count', cnt)), '[]'::jsonb)
+      from (
+        select job_role, count(*) as cnt
+        from interview_sessions
+        where job_role is not null and job_role <> ''
+        group by job_role
+        order by cnt desc, job_role
+        limit 5
+      ) t
+    ),
+    'sessions_last_7_days', (
+      select coalesce(jsonb_agg(jsonb_build_object('date', to_char(d, 'MM/DD'), 'count', cnt) order by d), '[]'::jsonb)
+      from (
+        select gs::date as d, count(s.id) as cnt
+        from generate_series(current_date - interval '6 days', current_date, interval '1 day') as gs
+        left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
+        group by gs
+        order by gs
+      ) t
+    )
+  ) into result;
+
+  return result;
+end;
+$$;
+
+-- 로그인한 사용자면 누구나 호출은 가능하지만, 함수 안에서 admin 이메일이 아니면 예외를 던진다.
+grant execute on function admin_dashboard_stats() to authenticated;
