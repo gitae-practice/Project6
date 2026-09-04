@@ -45,9 +45,10 @@ export interface AdminDashboardStats {
 // 증감 문구 + 화살표 방향을 계산하는 실제 로직 — {value, previous} 한 쌍만 받으면 되므로
 // 스톡 지표(computeStatTrend)와 플로우 지표(computeFlowTrend) 둘 다 이걸 공유한다.
 // - 비교할 이전 값이 없으면(null) 비교 자체가 불가능하므로 "변동없음"
-// - 값 차이가 0이면(또는 퍼센트가 0으로 반올림되면) 의미 있는 증감이 아니므로 "변동없음"
-// - 이전 값이 0인데 지금 값이 0보다 크면(예: 0명 → 1명) 퍼센트로 표현할 수 없으니
-//   ("0에서 몇 % 늘었다"는 말은 성립하지 않음) 대신 늘어난 절대량을 그대로 보여준다.
+// - 값 차이가 없으면(0) 의미 있는 증감이 아니므로 "변동없음"
+// - 그 외에는 "절대 증가량 / 퍼센트"를 같이 보여준다 (예: "+3 / +150%")
+// - 단, 이전 값이 0이면 퍼센트를 정의할 수 없으니("0에서 몇 % 늘었다"는 말이 성립하지 않음,
+//   0으로 나누기가 됨) 절대 증가량만 보여준다.
 function computeTrendFromPair(pair: {
   value: number | null;
   previous: number | null;
@@ -59,18 +60,18 @@ function computeTrendFromPair(pair: {
   if (diff === 0) {
     return { text: "변동없음", direction: "none" };
   }
+
+  const direction = diff > 0 ? "up" : "down";
+  const formattedDiff = Number.isInteger(diff) ? `${diff}` : diff.toFixed(1);
+  const diffText = `${diff > 0 ? "+" : ""}${formattedDiff}`;
+
   if (pair.previous === 0) {
-    const formatted = Number.isInteger(diff) ? `${diff}` : diff.toFixed(1);
-    return { text: `+${formatted}`, direction: "up" };
+    return { text: diffText, direction };
   }
+
   const percent = Math.round((diff / pair.previous) * 100);
-  if (percent === 0) {
-    return { text: "변동없음", direction: "none" };
-  }
-  return {
-    text: `${percent > 0 ? "+" : ""}${percent}%`,
-    direction: percent > 0 ? "up" : "down",
-  };
+  const percentText = `${percent > 0 ? "+" : ""}${percent}%`;
+  return { text: `${diffText} / ${percentText}`, direction };
 }
 
 export function computeStatTrend(
