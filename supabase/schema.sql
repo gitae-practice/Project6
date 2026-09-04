@@ -138,22 +138,80 @@ set search_path = public, auth
 as $$
 declare
   result jsonb;
+  week_ago timestamptz := now() - interval '7 days';
+  v_total_users bigint;
+  v_total_users_prev bigint;
+  v_total_sessions bigint;
+  v_total_sessions_prev bigint;
+  v_completed bigint;
+  v_completed_prev bigint;
+  v_in_progress bigint;
+  v_in_progress_prev bigint;
+  v_new_today bigint;
+  v_new_prev bigint;
+  v_avg_score numeric;
+  v_avg_score_prev numeric;
 begin
   if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
     raise exception '관리자만 조회할 수 있습니다.';
   end if;
 
+  -- 스탯 카드마다 "지금 값"과 "7일 전 시점 기준으로 같은 방식으로 계산한 값"을 같이 구해서
+  -- 프론트에서 증감률(전주 대비 +N%)을 계산할 수 있게 한다.
+  select count(*) into v_total_users from auth.users;
+  select count(*) into v_total_users_prev from auth.users where created_at <= week_ago;
+
+  select count(*) into v_total_sessions from interview_sessions;
+  select count(*) into v_total_sessions_prev from interview_sessions where created_at <= week_ago;
+
+  select count(*) into v_completed from interview_reports;
+  select count(*) into v_completed_prev from interview_reports where created_at <= week_ago;
+
+  -- 진행 중 = 세션은 만들어졌지만 아직 리포트가 없는 경우. 별도 status 컬럼 없이 판단한다.
+  select count(*) into v_in_progress
+  from interview_sessions s
+  where not exists (select 1 from interview_reports r where r.session_id = s.id);
+
+  -- "7일 전 시점의 진행 중"은, 그 시점까지 만들어졌는데 그 시점까지는 아직 리포트가 없었던 세션 수.
+  select count(*) into v_in_progress_prev
+  from interview_sessions s
+  where s.created_at <= week_ago
+    and not exists (
+      select 1 from interview_reports r where r.session_id = s.id and r.created_at <= week_ago
+    );
+
+  select count(*) into v_new_today from auth.users where created_at::date = current_date;
+  select count(*) into v_new_prev from auth.users where created_at::date = (current_date - 7);
+
+  -- 평균 점수 = "전체 면접의 평균"이 아니라 "유저별 평균의 평균" — 유저 한 명 한 명이 동일한
+  -- 비중을 갖도록 한 번 더 평균낸다 (면접을 많이/적게 본 유저가 전체 평균을 과도하게 끌지 않게).
+  select avg(user_avg) into v_avg_score
+  from (
+    select avg(r.overall_score) as user_avg
+    from interview_sessions s
+    join interview_reports r on r.session_id = s.id
+    group by s.user_id
+  ) t;
+
+  select avg(user_avg) into v_avg_score_prev
+  from (
+    select avg(r.overall_score) as user_avg
+    from interview_sessions s
+    join interview_reports r on r.session_id = s.id
+    where r.created_at <= week_ago
+    group by s.user_id
+  ) t;
+
   select jsonb_build_object(
-    'total_users', (select count(*) from auth.users),
-    'total_sessions', (select count(*) from interview_sessions),
-    'completed_interviews', (select count(*) from interview_reports),
-    'average_score', (select round(avg(overall_score)::numeric, 1) from interview_reports),
-    -- 진행 중 = 세션은 만들어졌지만 아직 리포트가 없는 경우. 별도 status 컬럼 없이 판단한다.
-    'in_progress_sessions', (
-      select count(*) from interview_sessions s
-      where not exists (select 1 from interview_reports r where r.session_id = s.id)
+    'total_users', jsonb_build_object('value', v_total_users, 'previous', v_total_users_prev),
+    'total_sessions', jsonb_build_object('value', v_total_sessions, 'previous', v_total_sessions_prev),
+    'completed_interviews', jsonb_build_object('value', v_completed, 'previous', v_completed_prev),
+    'in_progress_sessions', jsonb_build_object('value', v_in_progress, 'previous', v_in_progress_prev),
+    'new_users_today', jsonb_build_object('value', v_new_today, 'previous', v_new_prev),
+    'average_score', jsonb_build_object(
+      'value', round(v_avg_score::numeric, 1),
+      'previous', round(v_avg_score_prev::numeric, 1)
     ),
-    'new_users_today', (select count(*) from auth.users where created_at::date = current_date),
     'top_job_roles', (
       select coalesce(jsonb_agg(jsonb_build_object('job_role', job_role, 'count', cnt)), '[]'::jsonb)
       from (
