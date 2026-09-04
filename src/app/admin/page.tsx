@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Users, MessagesSquare, ClipboardCheck, Star, ArrowLeft } from "lucide-react";
+import { Users, MessagesSquare, ClipboardCheck, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { ADMIN_EMAIL } from "@/lib/admin";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -57,17 +56,9 @@ export default async function AdminPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
+      {/* 관리자 계정은 면접 화면을 쓸 일이 없으므로 홈으로 돌아가는 링크는 두지 않는다 */}
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-accent"
-          >
-            <ArrowLeft className="h-4 w-4" /> 오늘의 면접관
-          </Link>
-          <span className="text-border">|</span>
-          <h1 className="font-semibold">관리자 대시보드</h1>
-        </div>
+        <h1 className="font-semibold">관리자 대시보드</h1>
         <div className="flex items-center gap-1">
           <LogoutButton />
           <ThemeToggle />
