@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
 import { DashboardChrome } from "@/components/DashboardChrome";
 import { type HistorySidebarItem } from "@/components/HistorySidebar";
 import { createClient } from "@/lib/supabase/server";
+import { ADMIN_EMAIL } from "@/lib/admin";
 
 // interview_reports는 session_id가 unique라 1:1 관계지만, PostgREST 임베드는
 // 상황에 따라 배열 또는 단일 객체로 내려줄 수 있어 둘 다 방어적으로 처리한다.
@@ -19,6 +21,12 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   // 로그인 화면은 좌/우 2열 브랜딩 레이아웃을 자체적으로 그리므로 공용 헤더/사이드바 없이 그대로 노출한다.
   if (!user) {
     return <AuthForm />;
+  }
+
+  // 관리자 계정은 일반 면접 화면 대신 곧바로 관리자 대시보드로 보낸다.
+  // (주소창에 직접 /admin을 쳐야만 갈 수 있던 것을 로그인 직후 자동 이동으로 개선)
+  if (user.email === ADMIN_EMAIL) {
+    redirect("/admin");
   }
 
   // 완료된(리포트가 있는) 지난 세션만 사이드바에 보여준다.
