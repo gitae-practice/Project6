@@ -142,6 +142,10 @@ declare
   result jsonb;
   day_ago timestamptz := now() - interval '1 day';
   week_ago timestamptz := now() - interval '7 days';
+  -- DB 서버 시간대는 기본 UTC라서, "오늘"처럼 달력 날짜 경계가 필요한 계산(신규 가입자 등)은
+  -- UTC 기준 자정이 아니라 실제 사용자가 있는 한국 시간(KST) 자정 기준으로 맞춰야 한다.
+  -- (24시간 롤링 윈도우인 day_ago/week_ago/month_ago는 시간대와 무관해서 그대로 둬도 된다.)
+  kst_today date := (now() at time zone 'Asia/Seoul')::date;
   month_ago timestamptz := now() - interval '1 month';
 
   v_total_users bigint;
@@ -220,8 +224,10 @@ begin
   where s.created_at <= month_ago
     and not exists (select 1 from interview_reports r where r.session_id = s.id and r.created_at <= month_ago);
 
-  select count(*) into v_new_users_day from auth.users where created_at::date = current_date;
-  select count(*) into v_new_users_day_prev from auth.users where created_at::date = (current_date - 1);
+  select count(*) into v_new_users_day
+  from auth.users where (created_at at time zone 'Asia/Seoul')::date = kst_today;
+  select count(*) into v_new_users_day_prev
+  from auth.users where (created_at at time zone 'Asia/Seoul')::date = (kst_today - 1);
 
   select count(*) into v_new_users_week from auth.users where created_at >= week_ago;
   select count(*) into v_new_users_week_prev
@@ -312,6 +318,11 @@ as $$
 declare
   result jsonb;
   cutoff timestamptz;
+  -- DB 서버는 기본 UTC라서 date_trunc('hour', now())나 current_date를 그대로 쓰면 시간/날짜 경계가
+  -- 한국 시간(KST, UTC+9) 기준 "지금"과 최대 9시간까지 어긋난다 (예: 추이 차트가 실제 사용자의
+  -- 로컬 시각과 다른 시간대를 기준으로 그려짐). kst_now를 "지금을 KST 벽시계 시각으로 표현한 값"
+  -- 으로 미리 만들어두고, 시간/날짜 버킷을 나눌 때는 항상 이 값을 기준으로 삼는다.
+  kst_now timestamp := (now() at time zone 'Asia/Seoul');
 begin
   if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
     raise exception '관리자만 조회할 수 있습니다.';
@@ -361,14 +372,16 @@ begin
       ) c on c.range = b.range
     ),
     -- 추이 차트의 가로축 단위 자체를 기간별로 다르게 만든다: 일=시간별 24개, 주=일별 7개, 월=일별 30개.
+    -- 버킷 경계와 세션 매칭 둘 다 kst_now 기준(위 선언부 참고)으로 맞춰서, 화면에 찍히는 시각/날짜
+    -- 라벨이 실제 사용자의 한국 시간과 어긋나지 않게 한다.
     'trend', (
       case p_period
         when 'day' then (
           select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'HH24:00'), 'count', cnt) order by gs), '[]'::jsonb)
           from (
             select gs, count(s.id) as cnt
-            from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') as gs
-            left join interview_sessions s on date_trunc('hour', s.created_at) = gs
+            from generate_series(date_trunc('hour', kst_now) - interval '23 hours', date_trunc('hour', kst_now), interval '1 hour') as gs
+            left join interview_sessions s on date_trunc('hour', s.created_at at time zone 'Asia/Seoul') = gs
             group by gs
             order by gs
           ) t
@@ -377,8 +390,8 @@ begin
           select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'MM/DD'), 'count', cnt) order by gs), '[]'::jsonb)
           from (
             select gs::date as gs, count(s.id) as cnt
-            from generate_series(current_date - interval '6 days', current_date, interval '1 day') as gs
-            left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
+            from generate_series(kst_now::date - interval '6 days', kst_now::date, interval '1 day') as gs
+            left join interview_sessions s on (s.created_at at time zone 'Asia/Seoul')::date = gs::date
             group by gs
             order by gs
           ) t
@@ -387,8 +400,8 @@ begin
           select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'MM/DD'), 'count', cnt) order by gs), '[]'::jsonb)
           from (
             select gs::date as gs, count(s.id) as cnt
-            from generate_series(current_date - interval '29 days', current_date, interval '1 day') as gs
-            left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
+            from generate_series(kst_now::date - interval '29 days', kst_now::date, interval '1 day') as gs
+            left join interview_sessions s on (s.created_at at time zone 'Asia/Seoul')::date = gs::date
             group by gs
             order by gs
           ) t
