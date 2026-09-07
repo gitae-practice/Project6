@@ -41,6 +41,19 @@ const TREND_LABEL: Record<TrendPeriod, string> = {
   month: "최근 30일 면접 시작 추이",
 };
 
+// 추이 차트의 포인트 개수(일=24/주=7/월=30)가 maxLabels보다 많으면 일정 간격으로만 라벨을 남긴다.
+// 가장 최근 포인트(맨 끝, index length-1)를 기준으로 뒤에서부터 간격을 두고, 맨 처음(index 0)도
+// 항상 포함해서 — 라벨이 다닥다닥 붙어 겹쳐 보이는 걸 막으면서도 차트의 시작/끝은 항상 보이게 한다.
+function pickTrendLabelIndices(length: number, maxLabels: number): Set<number> {
+  if (length === 0) return new Set();
+  if (length <= maxLabels) return new Set(Array.from({ length }, (_, i) => i));
+  const step = Math.ceil(length / maxLabels);
+  const indices = new Set<number>();
+  for (let i = length - 1; i >= 0; i -= step) indices.add(i);
+  indices.add(0);
+  return indices;
+}
+
 // 스탯 카드 하나를 그리는 공통 UI — 값/라벨/증감 문구만 받으면 스톡·플로우 지표 둘 다 그린다.
 function StatCard({
   label,
@@ -108,8 +121,10 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
   const maxTrendCount = Math.max(1, ...(charts?.trend.map((d) => d.count) ?? []));
   const maxScoreCount = Math.max(1, ...(charts?.score_distribution.map((s) => s.count) ?? []));
 
-  // 추이 차트가 월 단위(30개)일 때는 막대마다 날짜를 다 붙이면 겹치므로 5개마다만 라벨을 보여준다.
-  const trendLabelEvery = period === "month" ? 5 : 1;
+  // 추이 차트 포인트가 많을 때(일=24개/월=30개) 막대마다 라벨을 다 붙이면 서로 겹쳐서 깨져 보이므로
+  // 최대 개수만 남기고 솎아낸다. 가장 최근 시점(오늘/지금)과 가장 오래된 시점은 항상 남겨서
+  // 차트가 어디서부터 어디까지인지 양 끝을 알아볼 수 있게 한다.
+  const trendLabelIndices = pickTrendLabelIndices(charts?.trend.length ?? 0, period === "week" ? 7 : 8);
 
   return (
     <div className="flex flex-col gap-4">
@@ -224,7 +239,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
                       style={{ height: `${(point.count / maxTrendCount) * 100}%`, minHeight: point.count > 0 ? "4px" : "1px" }}
                     />
                     <span className="text-[9px] whitespace-nowrap text-muted">
-                      {i % trendLabelEvery === 0 ? point.label : ""}
+                      {trendLabelIndices.has(i) ? point.label : ""}
                     </span>
                   </div>
                 ))}
