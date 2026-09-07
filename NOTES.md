@@ -2,6 +2,24 @@
 
 ## 완료된 작업
 
+### 2026-09-07 (계속 7)
+- **추이 차트에 좌우 화살표 스크롤 버튼 추가** (사용자 요청 — 스크롤바를 없앤 대신 눈에 보이는
+  넘김 버튼이 있으면 좋겠다는 피드백)
+  - `useDragToScroll()`을 `useHorizontalScrollController()`로 확장: 마우스 드래그 스크롤 기능은
+    그대로 두고, ① 스크롤 위치·카드 크기(ResizeObserver)를 감시해서 "더 넘길 방향이 있을 때만"
+    좌/우 화살표를 보여주는 `canScrollLeft`/`canScrollRight`, ② 화살표를 누르고 있는 동안
+    `requestAnimationFrame`으로 한 프레임씩 조금씩 이동시켜 마우스 휠 클릭(오토스크롤)처럼
+    부드럽게 계속 흘러가는 `startAutoScroll`/`stopAutoScroll`을 추가
+  - 화살표 버튼은 카드 좌/우 끝에 원형 버튼(`bg-surface` + `border-border`)으로 겹쳐 배치, lucide
+    `ChevronLeft`/`ChevronRight` 아이콘 사용
+  - 구현 중 겪은 린트 이슈 2건: (1) 훅이 반환한 객체를 `trendScroll.xxx`처럼 JSX에서 바로 점(.)
+    접근하면 내부에 ref를 쓰는 훅이라는 이유로 `react-hooks/refs`가 "렌더링 중 ref 접근"으로
+    오탐지 — 훅 호출 시점에 바로 구조분해해서 지역 변수로 만들어 해결. (2) 초기 상태를 맞추려고
+    effect 안에서 `updateScrollState()`를 동기 호출했더니 `react-hooks/set-state-in-effect`에
+    걸림 — `ResizeObserver`는 `observe()` 호출 시 최초 한 번은 알아서 비동기로 콜백을 실행해주므로
+    그 동기 호출 자체를 제거해서 해결
+- tsc/lint/build 전부 통과 확인
+
 ### 2026-09-07 (계속 6)
 - **추이 차트의 "일/월" 기준을 롤링 윈도우 → 달력 기준으로 변경** (사용자 요청) — 기존엔 "일"이
   지금 시각 기준 이전 24시간 롤링(예: 어제 11시~오늘 11시), "월"이 정확히 29일 전~오늘로 고정된

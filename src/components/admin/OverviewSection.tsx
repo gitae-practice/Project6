@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Users, MessagesSquare, ClipboardCheck, Star, Clock, UserPlus, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Users,
+  MessagesSquare,
+  ClipboardCheck,
+  Star,
+  Clock,
+  UserPlus,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   computeFlowTrend,
@@ -48,17 +58,43 @@ const TREND_LABEL: Record<TrendPeriod, string> = {
 // 보이고, 많을 때(일=24개/월=30개)만 자연스럽게 스크롤 영역이 된다.
 const TREND_BAR_WIDTH_PX = 40;
 
-// 터치 화면은 브라우저가 이미 가로 스크롤을 지원하므로, 마우스로 클릭+드래그할 때만 동작을
-// 추가해준다 (마우스가 없는 환경에서 어색하게 끼어들지 않도록 pointerType이 "mouse"일 때만 처리).
+// 추이 차트의 가로 스크롤 하나를 통째로 담당하는 훅 — ① 마우스 클릭+드래그로 넘기기,
+// ② 좌우 끝에 화살표 버튼을 보여줄지 말지(스크롤 위치에 따라), ③ 화살표를 누르고 있는 동안
+// 마우스 휠 클릭(오토스크롤)처럼 천천히 계속 이동하는 것까지 한 곳에서 처리한다.
 //
 // useRef가 아니라 useState로 DOM 노드를 들고 있는 이유 — 이 스크롤 영역은 데이터 로딩이 끝나야
 // 조건부로 렌더링되는데, useRef라면 "노드가 아직 없을 때(로딩 중) 한 번 실행되고 끝나는" 일반
 // useEffect(deps: [])는 그 이후 실제 노드가 마운트돼도 다시 실행되지 않아 리스너가 아예 안 붙는다.
 // state로 들고 있으면 노드가 마운트/언마운트될 때마다(ref 콜백) state가 바뀌면서 effect가 다시
 // 실행되어, 실제로 존재하는 노드에 정확히 리스너를 붙였다 뗄 수 있다.
-function useDragToScroll<T extends HTMLElement>() {
+function useHorizontalScrollController<T extends HTMLElement>() {
   const [el, setEl] = useState<T | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
+  const updateScrollState = useCallback(() => {
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  }, [el]);
+
+  // 스크롤 위치가 바뀌거나(휠/드래그/화살표), 카드 크기·데이터(막대 개수)가 바뀌어 전체 너비가
+  // 달라질 때마다 화살표를 다시 보여줄지 판단한다. ResizeObserver는 observe()를 호출하면 최초
+  // 한 번은 비동기로 알아서 콜백을 실행해주므로, 초기 상태를 맞추려고 effect 안에서 따로
+  // updateScrollState()를 동기 호출할 필요가 없다 (그렇게 하면 react-hooks/set-state-in-effect에 걸림).
+  useEffect(() => {
+    if (!el) return;
+    const resizeObserver = new ResizeObserver(updateScrollState);
+    resizeObserver.observe(el);
+    el.addEventListener("scroll", updateScrollState);
+    return () => {
+      resizeObserver.disconnect();
+      el.removeEventListener("scroll", updateScrollState);
+    };
+  }, [el, updateScrollState]);
+
+  // 마우스 클릭+드래그로 스크롤 — 터치 화면은 브라우저가 이미 가로 스크롤을 지원하므로
+  // pointerType이 "mouse"일 때만 끼어든다.
   useEffect(() => {
     if (!el) return;
 
@@ -93,7 +129,41 @@ function useDragToScroll<T extends HTMLElement>() {
     };
   }, [el]);
 
-  return setEl;
+  // 화살표 버튼을 누르고 있는 동안 requestAnimationFrame으로 한 프레임씩 조금씩 옮겨서
+  // "마우스 휠 클릭(오토스크롤)"처럼 천천히 계속 이동하는 느낌을 낸다. 살짝 눌렀다 떼면
+  // 몇 프레임만 움직여 조금만 이동하고, 계속 누르고 있으면 끝까지 부드럽게 흘러간다.
+  const autoScrollDirRef = useRef<0 | 1 | -1>(0);
+  const autoScrollFrameRef = useRef<number | null>(null);
+  const AUTO_SCROLL_SPEED_PX = 6; // 프레임당 이동량 — 값을 키우면 더 빨라진다
+
+  const stopAutoScroll = useCallback(() => {
+    autoScrollDirRef.current = 0;
+    if (autoScrollFrameRef.current != null) {
+      cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = null;
+    }
+  }, []);
+
+  const startAutoScroll = useCallback(
+    (direction: 1 | -1) => {
+      if (!el) return;
+      autoScrollDirRef.current = direction;
+      function step() {
+        if (!el || autoScrollDirRef.current === 0) return;
+        el.scrollLeft += autoScrollDirRef.current * AUTO_SCROLL_SPEED_PX;
+        autoScrollFrameRef.current = requestAnimationFrame(step);
+      }
+      if (autoScrollFrameRef.current == null) {
+        autoScrollFrameRef.current = requestAnimationFrame(step);
+      }
+    },
+    [el]
+  );
+
+  // 컴포넌트가 사라질 때 혹시 진행 중이던 애니메이션 프레임이 남아있지 않게 정리한다.
+  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+
+  return { setEl, canScrollLeft, canScrollRight, startAutoScroll, stopAutoScroll };
 }
 
 // 스탯 카드 하나를 그리는 공통 UI — 값/라벨/증감 문구만 받으면 스톡·플로우 지표 둘 다 그린다.
@@ -163,7 +233,16 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
   const maxTrendCount = Math.max(1, ...(charts?.trend.map((d) => d.count) ?? []));
   const maxScoreCount = Math.max(1, ...(charts?.score_distribution.map((s) => s.count) ?? []));
 
-  const trendScrollRef = useDragToScroll<HTMLDivElement>();
+  // 훅이 반환하는 객체를 "trendScroll.xxx"처럼 JSX 안에서 바로 점(.) 접근하면, 내부적으로 ref를
+  // 쓰는 훅이라는 이유로 린터(react-hooks/refs)가 "렌더링 중 ref 접근"으로 과탐지한다.
+  // 호출 시점에 바로 구조분해해서 평범한 지역 변수로 만들어두면 그 오탐이 사라진다.
+  const {
+    setEl: setTrendScrollEl,
+    canScrollLeft: canScrollTrendLeft,
+    canScrollRight: canScrollTrendRight,
+    startAutoScroll: startTrendAutoScroll,
+    stopAutoScroll: stopTrendAutoScroll,
+  } = useHorizontalScrollController<HTMLDivElement>();
 
   return (
     <div className="flex flex-col gap-4">
@@ -263,31 +342,58 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
             )}
           </div>
 
-          {/* 면접 시작 추이 — 일=시간별 24개, 주=일별 7개, 월=일별 30개. 막대 개수가 많아 카드
-              폭을 넘치면 라벨을 솎아내는 대신 가로 스크롤(데스크톱은 마우스 드래그도 가능)로 넘겨본다. */}
+          {/* 면접 시작 추이 — 일=시간별 24개, 주=일별 7개, 월=일별 30개 안팎. 막대 개수가 많아 카드
+              폭을 넘치면 라벨을 솎아내는 대신 가로 스크롤(마우스 드래그 또는 좌우 화살표 버튼)로
+              넘겨본다. 화살표는 실제로 더 넘길 방향이 있을 때만 나타난다. */}
           <div className="glass-card flex flex-col gap-4 rounded-xl p-5">
             <p className="text-sm font-medium text-muted">{TREND_LABEL[period]}</p>
             {chartsLoading || !charts ? (
               <p className="text-xs text-muted">불러오는 중...</p>
             ) : (
-              <div
-                ref={trendScrollRef}
-                className="no-scrollbar flex h-32 cursor-grab items-end justify-between gap-1 overflow-x-auto overflow-y-hidden pb-1 select-none active:cursor-grabbing"
-              >
-                {charts.trend.map((point) => (
-                  <div
-                    key={point.label}
-                    className="flex flex-none flex-col items-center gap-1.5"
-                    style={{ width: `${TREND_BAR_WIDTH_PX}px` }}
+              <div className="relative">
+                {canScrollTrendLeft && (
+                  <button
+                    type="button"
+                    aria-label="이전 시점으로 스크롤"
+                    onPointerDown={() => startTrendAutoScroll(-1)}
+                    onPointerUp={stopTrendAutoScroll}
+                    onPointerLeave={stopTrendAutoScroll}
+                    className="absolute top-1/2 left-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
                   >
-                    <span className="text-[10px] text-muted">{point.count > 0 ? point.count : ""}</span>
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                )}
+                {canScrollTrendRight && (
+                  <button
+                    type="button"
+                    aria-label="다음 시점으로 스크롤"
+                    onPointerDown={() => startTrendAutoScroll(1)}
+                    onPointerUp={stopTrendAutoScroll}
+                    onPointerLeave={stopTrendAutoScroll}
+                    className="absolute top-1/2 right-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+                <div
+                  ref={setTrendScrollEl}
+                  className="no-scrollbar flex h-32 cursor-grab items-end justify-between gap-1 overflow-x-auto overflow-y-hidden pb-1 select-none active:cursor-grabbing"
+                >
+                  {charts.trend.map((point) => (
                     <div
-                      className="w-full rounded-t-md bg-accent"
-                      style={{ height: `${(point.count / maxTrendCount) * 100}%`, minHeight: point.count > 0 ? "4px" : "1px" }}
-                    />
-                    <span className="text-[9px] whitespace-nowrap text-muted">{point.label}</span>
-                  </div>
-                ))}
+                      key={point.label}
+                      className="flex flex-none flex-col items-center gap-1.5"
+                      style={{ width: `${TREND_BAR_WIDTH_PX}px` }}
+                    >
+                      <span className="text-[10px] text-muted">{point.count > 0 ? point.count : ""}</span>
+                      <div
+                        className="w-full rounded-t-md bg-accent"
+                        style={{ height: `${(point.count / maxTrendCount) * 100}%`, minHeight: point.count > 0 ? "4px" : "1px" }}
+                      />
+                      <span className="text-[9px] whitespace-nowrap text-muted">{point.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
