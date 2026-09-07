@@ -290,26 +290,53 @@ begin
       'day', round(v_avg_score_day::numeric, 1),
       'week', round(v_avg_score_week::numeric, 1),
       'month', round(v_avg_score_month::numeric, 1)
-    ),
+    )
+  ) into result;
+
+  return result;
+end;
+$$;
+
+-- 로그인한 사용자면 누구나 호출은 가능하지만, 함수 안에서 admin 이메일이 아니면 예외를 던진다.
+grant execute on function admin_dashboard_stats() to authenticated;
+
+-- 개요 탭 하단 3개 차트(인기 직무 TOP5 / 시작 추이 / 점수 분포)용 — 스탯 카드와 달리 이 3개는
+-- "지금 값 vs N일 전 값" 비교가 아니라 "선택된 기간 동안의 집계 자체"이므로, 일/주/월 토글이
+-- 바뀔 때마다 이 함수를 그 기간으로 다시 호출해서 완전히 새로 집계한 결과를 받는다.
+create or replace function admin_period_charts(p_period text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  result jsonb;
+  cutoff timestamptz;
+begin
+  if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
+    raise exception '관리자만 조회할 수 있습니다.';
+  end if;
+
+  if p_period = 'day' then
+    cutoff := now() - interval '1 day';
+  elsif p_period = 'week' then
+    cutoff := now() - interval '7 days';
+  elsif p_period = 'month' then
+    cutoff := now() - interval '1 month';
+  else
+    raise exception '유효하지 않은 기간입니다: %', p_period;
+  end if;
+
+  select jsonb_build_object(
     'top_job_roles', (
       select coalesce(jsonb_agg(jsonb_build_object('job_role', job_role, 'count', cnt)), '[]'::jsonb)
       from (
         select job_role, count(*) as cnt
         from interview_sessions
-        where job_role is not null and job_role <> ''
+        where job_role is not null and job_role <> '' and created_at >= cutoff
         group by job_role
         order by cnt desc, job_role
         limit 5
-      ) t
-    ),
-    'sessions_last_7_days', (
-      select coalesce(jsonb_agg(jsonb_build_object('date', to_char(d, 'MM/DD'), 'count', cnt) order by d), '[]'::jsonb)
-      from (
-        select gs::date as d, count(s.id) as cnt
-        from generate_series(current_date - interval '6 days', current_date, interval '1 day') as gs
-        left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
-        group by gs
-        order by gs
       ) t
     ),
     -- 점수 구간은 데이터가 없는 구간도 0건으로 항상 5개 다 나오게 고정 목록에 왼쪽 조인한다.
@@ -329,8 +356,44 @@ begin
           end as range,
           count(*) as cnt
         from interview_reports
+        where created_at >= cutoff
         group by 1
       ) c on c.range = b.range
+    ),
+    -- 추이 차트의 가로축 단위 자체를 기간별로 다르게 만든다: 일=시간별 24개, 주=일별 7개, 월=일별 30개.
+    'trend', (
+      case p_period
+        when 'day' then (
+          select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'HH24:00'), 'count', cnt) order by gs), '[]'::jsonb)
+          from (
+            select gs, count(s.id) as cnt
+            from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') as gs
+            left join interview_sessions s on date_trunc('hour', s.created_at) = gs
+            group by gs
+            order by gs
+          ) t
+        )
+        when 'week' then (
+          select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'MM/DD'), 'count', cnt) order by gs), '[]'::jsonb)
+          from (
+            select gs::date as gs, count(s.id) as cnt
+            from generate_series(current_date - interval '6 days', current_date, interval '1 day') as gs
+            left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
+            group by gs
+            order by gs
+          ) t
+        )
+        else ( -- month: 최근 30일을 일별로
+          select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'MM/DD'), 'count', cnt) order by gs), '[]'::jsonb)
+          from (
+            select gs::date as gs, count(s.id) as cnt
+            from generate_series(current_date - interval '29 days', current_date, interval '1 day') as gs
+            left join interview_sessions s on date_trunc('day', s.created_at)::date = gs::date
+            group by gs
+            order by gs
+          ) t
+        )
+      end
     )
   ) into result;
 
@@ -338,8 +401,7 @@ begin
 end;
 $$;
 
--- 로그인한 사용자면 누구나 호출은 가능하지만, 함수 안에서 admin 이메일이 아니면 예외를 던진다.
-grant execute on function admin_dashboard_stats() to authenticated;
+grant execute on function admin_period_charts(text) to authenticated;
 
 -- 이메일을 앞 3글자 + *** + 도메인만 남기고 마스킹한다 (예: abc***@gmail.com).
 -- 관리자 화면이라도 개별 유저 이메일 전체를 그대로 노출하지 않기 위해 DB 함수 안에서부터 가공한다.

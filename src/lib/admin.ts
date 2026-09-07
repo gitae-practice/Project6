@@ -37,9 +37,14 @@ export interface AdminDashboardStats {
   average_score: AdminStatWithTrend;
   in_progress_sessions: AdminStatWithTrend;
   new_users: AdminFlowStat;
+}
+
+// 개요 탭 하단 3개 차트 — 스탯 카드와 달리 "지금 vs 과거 시점" 비교가 아니라 "선택된 기간 동안의
+// 집계 자체"라서, 일/주/월 토글이 바뀔 때마다 admin_period_charts(period)를 다시 호출해서 받는다.
+export interface AdminPeriodCharts {
   top_job_roles: { job_role: string; count: number }[];
-  sessions_last_7_days: { date: string; count: number }[];
   score_distribution: { range: string; count: number }[];
+  trend: { label: string; count: number }[]; // 일=시간별 24개, 주=일별 7개, 월=일별 30개
 }
 
 // 증감 문구 + 화살표 방향을 계산하는 실제 로직 — {value, previous} 한 쌍만 받으면 되므로
