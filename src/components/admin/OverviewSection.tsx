@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Users, MessagesSquare, ClipboardCheck, Star, Clock, UserPlus, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -41,20 +41,54 @@ const TREND_LABEL: Record<TrendPeriod, string> = {
   month: "최근 30일 면접 시작 추이",
 };
 
-// 추이 차트의 포인트 개수(일=24/주=7/월=30)가 maxLabels보다 많으면 일정 간격으로만 라벨을 남긴다.
-// 0번부터 마지막 인덱스까지를 maxLabels개로 "균등 분할"해서 고르므로 양 끝(가장 오래된/가장 최근
-// 시점)은 항상 포함되면서도 나머지 라벨들이 일정한 간격을 유지한다.
-// (이전에는 뒤에서부터 step 간격으로 고르고 0번을 별도로 강제 추가했더니, step이 조건에 따라
-//  0번 바로 옆(예: 1번)을 고르는 경우가 생겨서 두 라벨이 거의 붙어 겹쳐 보이는 버그가 있었다.)
-function pickTrendLabelIndices(length: number, maxLabels: number): Set<number> {
-  if (length === 0) return new Set();
-  if (length <= maxLabels) return new Set(Array.from({ length }, (_, i) => i));
-  const indices = new Set<number>();
-  const step = (length - 1) / (maxLabels - 1);
-  for (let k = 0; k < maxLabels; k++) {
-    indices.add(Math.round(k * step));
-  }
-  return indices;
+// 추이 차트는 기간에 따라 막대 개수가 24개/30개까지 늘어나는데, 라벨을 솎아내는 방식은 아무리
+// 다듬어도 칼럼 폭이 좁아 라벨이 겹치거나 카드 밖으로 삐져나가는 문제가 반복됐다. 그래서 막대마다
+// 고정 폭을 주고 라벨을 전부 그대로 표시하되, 카드 폭을 넘치면 가로 스크롤(+마우스 드래그)로
+// 넘겨보게 한다 — 데이터가 적을 때(예: 주=7개)는 고정 폭 합이 카드 폭보다 작아서 지금처럼 꽉 차게
+// 보이고, 많을 때(일=24개/월=30개)만 자연스럽게 스크롤 영역이 된다.
+const TREND_BAR_WIDTH_PX = 40;
+
+// 터치 화면은 브라우저가 이미 가로 스크롤을 지원하므로, 마우스로 클릭+드래그할 때만 동작을
+// 추가해준다 (마우스가 없는 환경에서 어색하게 끼어들지 않도록 pointerType이 "mouse"일 때만 처리).
+function useDragToScroll<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let startScrollLeft = 0;
+
+    function handlePointerDown(e: PointerEvent) {
+      if (e.pointerType !== "mouse" || !el) return;
+      isDragging = true;
+      startX = e.clientX;
+      startScrollLeft = el.scrollLeft;
+      el.setPointerCapture(e.pointerId);
+    }
+    function handlePointerMove(e: PointerEvent) {
+      if (!isDragging || !el) return;
+      el.scrollLeft = startScrollLeft - (e.clientX - startX);
+    }
+    function handlePointerUp() {
+      isDragging = false;
+    }
+
+    el.addEventListener("pointerdown", handlePointerDown);
+    el.addEventListener("pointermove", handlePointerMove);
+    el.addEventListener("pointerup", handlePointerUp);
+    el.addEventListener("pointercancel", handlePointerUp);
+    return () => {
+      el.removeEventListener("pointerdown", handlePointerDown);
+      el.removeEventListener("pointermove", handlePointerMove);
+      el.removeEventListener("pointerup", handlePointerUp);
+      el.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, []);
+
+  return ref;
 }
 
 // 스탯 카드 하나를 그리는 공통 UI — 값/라벨/증감 문구만 받으면 스톡·플로우 지표 둘 다 그린다.
@@ -124,10 +158,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
   const maxTrendCount = Math.max(1, ...(charts?.trend.map((d) => d.count) ?? []));
   const maxScoreCount = Math.max(1, ...(charts?.score_distribution.map((s) => s.count) ?? []));
 
-  // 추이 차트 포인트가 많을 때(일=24개/월=30개) 막대마다 라벨을 다 붙이면 서로 겹쳐서 깨져 보이므로
-  // 최대 개수만 남기고 솎아낸다. 가장 최근 시점(오늘/지금)과 가장 오래된 시점은 항상 남겨서
-  // 차트가 어디서부터 어디까지인지 양 끝을 알아볼 수 있게 한다.
-  const trendLabelIndices = pickTrendLabelIndices(charts?.trend.length ?? 0, period === "week" ? 7 : 8);
+  const trendScrollRef = useDragToScroll<HTMLDivElement>();
 
   return (
     <div className="flex flex-col gap-4">
@@ -227,30 +258,29 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
             )}
           </div>
 
-          {/* 면접 시작 추이 — 일=시간별, 주=일별 7개, 월=일별 30개 */}
-          <div className="glass-card flex flex-col gap-4 overflow-hidden rounded-xl p-5">
+          {/* 면접 시작 추이 — 일=시간별 24개, 주=일별 7개, 월=일별 30개. 막대 개수가 많아 카드
+              폭을 넘치면 라벨을 솎아내는 대신 가로 스크롤(데스크톱은 마우스 드래그도 가능)로 넘겨본다. */}
+          <div className="glass-card flex flex-col gap-4 rounded-xl p-5">
             <p className="text-sm font-medium text-muted">{TREND_LABEL[period]}</p>
             {chartsLoading || !charts ? (
               <p className="text-xs text-muted">불러오는 중...</p>
             ) : (
-              <div className="flex h-32 items-end justify-between gap-1">
-                {charts.trend.map((point, i) => (
-                  <div key={point.label} className="flex flex-1 flex-col items-center gap-1.5">
+              <div
+                ref={trendScrollRef}
+                className="flex h-32 cursor-grab items-end justify-between gap-1 overflow-x-auto overflow-y-hidden pb-1 select-none active:cursor-grabbing"
+              >
+                {charts.trend.map((point) => (
+                  <div
+                    key={point.label}
+                    className="flex flex-none flex-col items-center gap-1.5"
+                    style={{ width: `${TREND_BAR_WIDTH_PX}px` }}
+                  >
                     <span className="text-[10px] text-muted">{point.count > 0 ? point.count : ""}</span>
                     <div
                       className="w-full rounded-t-md bg-accent"
                       style={{ height: `${(point.count / maxTrendCount) * 100}%`, minHeight: point.count > 0 ? "4px" : "1px" }}
                     />
-                    {/* 라벨 텍스트가 좁은 칼럼 폭보다 넓을 때, 가운데 정렬이면 양옆으로 겹쳐 넘치다가
-                        맨 앞/뒤 칼럼에서는 카드 밖(옆 카드 쪽)까지 삐져나가던 문제가 있었다.
-                        맨 앞은 왼쪽 정렬, 맨 뒤는 오른쪽 정렬로 바꿔서 항상 차트 안쪽으로만 넘치게 한다. */}
-                    <span
-                      className={`w-full text-[9px] whitespace-nowrap text-muted ${
-                        i === 0 ? "text-left" : i === charts.trend.length - 1 ? "text-right" : "text-center"
-                      }`}
-                    >
-                      {trendLabelIndices.has(i) ? point.label : ""}
-                    </span>
+                    <span className="text-[9px] whitespace-nowrap text-muted">{point.label}</span>
                   </div>
                 ))}
               </div>
