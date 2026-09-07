@@ -323,17 +323,21 @@ declare
   -- 로컬 시각과 다른 시간대를 기준으로 그려짐). kst_now를 "지금을 KST 벽시계 시각으로 표현한 값"
   -- 으로 미리 만들어두고, 시간/날짜 버킷을 나눌 때는 항상 이 값을 기준으로 삼는다.
   kst_now timestamp := (now() at time zone 'Asia/Seoul');
+  -- "일"은 롤링 24시간이 아니라 오늘 00:00(KST)부터 지금까지로 고정한다 — 자정을 KST 자정으로
+  -- 잡은 뒤 다시 timestamptz로 변환(뒤의 "at time zone"은 반대 방향 변환: naive timestamp를
+  -- 그 시간대의 시각으로 해석해서 절대 시각을 만든다)해서 cutoff/버킷 계산에 그대로 쓴다.
+  kst_day_start timestamptz := date_trunc('day', kst_now) at time zone 'Asia/Seoul';
 begin
   if (auth.jwt() ->> 'email') is distinct from 'admin@admin.com' then
     raise exception '관리자만 조회할 수 있습니다.';
   end if;
 
   if p_period = 'day' then
-    cutoff := now() - interval '1 day';
+    cutoff := kst_day_start; -- 오늘(KST) 00:00부터
   elsif p_period = 'week' then
-    cutoff := now() - interval '7 days';
+    cutoff := now() - interval '7 days'; -- 롤링 7일, 그대로 유지
   elsif p_period = 'month' then
-    cutoff := now() - interval '1 month';
+    cutoff := now() - interval '1 month'; -- 지금 기준 정확히 한 달 전까지
   else
     raise exception '유효하지 않은 기간입니다: %', p_period;
   end if;
@@ -371,7 +375,8 @@ begin
         group by 1
       ) c on c.range = b.range
     ),
-    -- 추이 차트의 가로축 단위 자체를 기간별로 다르게 만든다: 일=시간별 24개, 주=일별 7개, 월=일별 30개.
+    -- 추이 차트의 가로축 단위 자체를 기간별로 다르게 만든다.
+    -- 일 = 오늘 00시~23시(고정, 24칸) / 주 = 최근 7일(롤링) / 월 = 정확히 한 달 전~오늘(가변 일수).
     -- 버킷 경계와 세션 매칭 둘 다 kst_now 기준(위 선언부 참고)으로 맞춰서, 화면에 찍히는 시각/날짜
     -- 라벨이 실제 사용자의 한국 시간과 어긋나지 않게 한다.
     'trend', (
@@ -380,7 +385,7 @@ begin
           select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'HH24:00'), 'count', cnt) order by gs), '[]'::jsonb)
           from (
             select gs, count(s.id) as cnt
-            from generate_series(date_trunc('hour', kst_now) - interval '23 hours', date_trunc('hour', kst_now), interval '1 hour') as gs
+            from generate_series(date_trunc('day', kst_now), date_trunc('day', kst_now) + interval '23 hours', interval '1 hour') as gs
             left join interview_sessions s on date_trunc('hour', s.created_at at time zone 'Asia/Seoul') = gs
             group by gs
             order by gs
@@ -396,11 +401,11 @@ begin
             order by gs
           ) t
         )
-        else ( -- month: 최근 30일을 일별로
+        else ( -- month: 지금 기준 정확히 한 달 전부터 오늘까지 (달마다 날짜 수가 달라 칸 수도 28~31개로 가변)
           select coalesce(jsonb_agg(jsonb_build_object('label', to_char(gs, 'MM/DD'), 'count', cnt) order by gs), '[]'::jsonb)
           from (
             select gs::date as gs, count(s.id) as cnt
-            from generate_series(kst_now::date - interval '29 days', kst_now::date, interval '1 day') as gs
+            from generate_series(kst_now::date - interval '1 month', kst_now::date, interval '1 day') as gs
             left join interview_sessions s on (s.created_at at time zone 'Asia/Seoul')::date = gs::date
             group by gs
             order by gs

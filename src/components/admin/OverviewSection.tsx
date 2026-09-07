@@ -38,7 +38,7 @@ const SCORE_DIST_LABEL: Record<TrendPeriod, string> = {
 const TREND_LABEL: Record<TrendPeriod, string> = {
   day: "오늘 시간대별 면접 시작 추이",
   week: "최근 7일 면접 시작 추이",
-  month: "최근 30일 면접 시작 추이",
+  month: "최근 한 달 면접 시작 추이", // 달마다 날짜 수가 달라(28~31일) "30일"로 고정 표기하지 않는다
 };
 
 // 추이 차트는 기간에 따라 막대 개수가 24개/30개까지 늘어나는데, 라벨을 솎아내는 방식은 아무리
