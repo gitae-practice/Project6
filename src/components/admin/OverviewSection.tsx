@@ -358,7 +358,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
                     onPointerDown={() => startTrendAutoScroll(-1)}
                     onPointerUp={stopTrendAutoScroll}
                     onPointerLeave={stopTrendAutoScroll}
-                    className="absolute top-1/2 left-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
+                    className="absolute top-10 left-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -370,7 +370,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
                     onPointerDown={() => startTrendAutoScroll(1)}
                     onPointerUp={stopTrendAutoScroll}
                     onPointerLeave={stopTrendAutoScroll}
-                    className="absolute top-1/2 right-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
+                    className="absolute top-10 right-0 z-10 -translate-y-1/2 rounded-full border border-border bg-surface p-1 text-muted shadow-sm hover:text-foreground"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
