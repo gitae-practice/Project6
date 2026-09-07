@@ -42,15 +42,18 @@ const TREND_LABEL: Record<TrendPeriod, string> = {
 };
 
 // 추이 차트의 포인트 개수(일=24/주=7/월=30)가 maxLabels보다 많으면 일정 간격으로만 라벨을 남긴다.
-// 가장 최근 포인트(맨 끝, index length-1)를 기준으로 뒤에서부터 간격을 두고, 맨 처음(index 0)도
-// 항상 포함해서 — 라벨이 다닥다닥 붙어 겹쳐 보이는 걸 막으면서도 차트의 시작/끝은 항상 보이게 한다.
+// 0번부터 마지막 인덱스까지를 maxLabels개로 "균등 분할"해서 고르므로 양 끝(가장 오래된/가장 최근
+// 시점)은 항상 포함되면서도 나머지 라벨들이 일정한 간격을 유지한다.
+// (이전에는 뒤에서부터 step 간격으로 고르고 0번을 별도로 강제 추가했더니, step이 조건에 따라
+//  0번 바로 옆(예: 1번)을 고르는 경우가 생겨서 두 라벨이 거의 붙어 겹쳐 보이는 버그가 있었다.)
 function pickTrendLabelIndices(length: number, maxLabels: number): Set<number> {
   if (length === 0) return new Set();
   if (length <= maxLabels) return new Set(Array.from({ length }, (_, i) => i));
-  const step = Math.ceil(length / maxLabels);
   const indices = new Set<number>();
-  for (let i = length - 1; i >= 0; i -= step) indices.add(i);
-  indices.add(0);
+  const step = (length - 1) / (maxLabels - 1);
+  for (let k = 0; k < maxLabels; k++) {
+    indices.add(Math.round(k * step));
+  }
   return indices;
 }
 
@@ -225,7 +228,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
           </div>
 
           {/* 면접 시작 추이 — 일=시간별, 주=일별 7개, 월=일별 30개 */}
-          <div className="glass-card flex flex-col gap-4 rounded-xl p-5">
+          <div className="glass-card flex flex-col gap-4 overflow-hidden rounded-xl p-5">
             <p className="text-sm font-medium text-muted">{TREND_LABEL[period]}</p>
             {chartsLoading || !charts ? (
               <p className="text-xs text-muted">불러오는 중...</p>
@@ -238,7 +241,14 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
                       className="w-full rounded-t-md bg-accent"
                       style={{ height: `${(point.count / maxTrendCount) * 100}%`, minHeight: point.count > 0 ? "4px" : "1px" }}
                     />
-                    <span className="text-[9px] whitespace-nowrap text-muted">
+                    {/* 라벨 텍스트가 좁은 칼럼 폭보다 넓을 때, 가운데 정렬이면 양옆으로 겹쳐 넘치다가
+                        맨 앞/뒤 칼럼에서는 카드 밖(옆 카드 쪽)까지 삐져나가던 문제가 있었다.
+                        맨 앞은 왼쪽 정렬, 맨 뒤는 오른쪽 정렬로 바꿔서 항상 차트 안쪽으로만 넘치게 한다. */}
+                    <span
+                      className={`w-full text-[9px] whitespace-nowrap text-muted ${
+                        i === 0 ? "text-left" : i === charts.trend.length - 1 ? "text-right" : "text-center"
+                      }`}
+                    >
                       {trendLabelIndices.has(i) ? point.label : ""}
                     </span>
                   </div>
