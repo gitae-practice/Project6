@@ -56,6 +56,16 @@ body {
   -webkit-backdrop-filter: blur(12px);
 }
 
+/* 스크롤은 되지만 스크롤바는 안 보이게 — 관리자 대시보드 추이 차트처럼 가로 스크롤/드래그로만
+   넘기게 하고 싶은 곳에 사용 (기능은 그대로, 시각적으로만 스크롤바를 숨긴다) */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 구형 Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
 /* 로그인 화면 좌측 브랜딩 패널의 미세한 점 패턴 배경 */
 .dot-grid {
   background-image: radial-gradient(circle, rgba(249, 115, 22, 0.3) 1px, transparent 1px);

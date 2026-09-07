@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Users, MessagesSquare, ClipboardCheck, Star, Clock, UserPlus, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -50,11 +50,16 @@ const TREND_BAR_WIDTH_PX = 40;
 
 // 터치 화면은 브라우저가 이미 가로 스크롤을 지원하므로, 마우스로 클릭+드래그할 때만 동작을
 // 추가해준다 (마우스가 없는 환경에서 어색하게 끼어들지 않도록 pointerType이 "mouse"일 때만 처리).
+//
+// useRef가 아니라 useState로 DOM 노드를 들고 있는 이유 — 이 스크롤 영역은 데이터 로딩이 끝나야
+// 조건부로 렌더링되는데, useRef라면 "노드가 아직 없을 때(로딩 중) 한 번 실행되고 끝나는" 일반
+// useEffect(deps: [])는 그 이후 실제 노드가 마운트돼도 다시 실행되지 않아 리스너가 아예 안 붙는다.
+// state로 들고 있으면 노드가 마운트/언마운트될 때마다(ref 콜백) state가 바뀌면서 effect가 다시
+// 실행되어, 실제로 존재하는 노드에 정확히 리스너를 붙였다 뗄 수 있다.
 function useDragToScroll<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+  const [el, setEl] = useState<T | null>(null);
 
   useEffect(() => {
-    const el = ref.current;
     if (!el) return;
 
     let isDragging = false;
@@ -86,9 +91,9 @@ function useDragToScroll<T extends HTMLElement>() {
       el.removeEventListener("pointerup", handlePointerUp);
       el.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, []);
+  }, [el]);
 
-  return ref;
+  return setEl;
 }
 
 // 스탯 카드 하나를 그리는 공통 UI — 값/라벨/증감 문구만 받으면 스톡·플로우 지표 둘 다 그린다.
@@ -267,7 +272,7 @@ export function OverviewSection({ stats }: { stats: AdminDashboardStats }) {
             ) : (
               <div
                 ref={trendScrollRef}
-                className="flex h-32 cursor-grab items-end justify-between gap-1 overflow-x-auto overflow-y-hidden pb-1 select-none active:cursor-grabbing"
+                className="no-scrollbar flex h-32 cursor-grab items-end justify-between gap-1 overflow-x-auto overflow-y-hidden pb-1 select-none active:cursor-grabbing"
               >
                 {charts.trend.map((point) => (
                   <div
