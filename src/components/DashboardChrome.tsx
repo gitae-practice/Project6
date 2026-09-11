@@ -1,10 +1,25 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Menu } from "lucide-react";
+import Link from "next/link";
+import { Menu, UserCog } from "lucide-react";
 import { HistorySidebar, type HistorySidebarItem } from "@/components/HistorySidebar";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
+// 마이페이지 링크 — 모바일/데스크톱 헤더 양쪽에서 똑같이 쓰므로 따로 뺐다.
+function MyPageLink() {
+  return (
+    <Link
+      href="/mypage"
+      aria-label="마이페이지"
+      title="마이페이지"
+      className="flex h-11 w-11 items-center justify-center rounded-lg text-muted transition-colors hover:bg-border hover:text-accent"
+    >
+      <UserCog className="h-5 w-5" />
+    </Link>
+  );
+}
 
 // 로그인 후 화면 전체를 감싸는 클라이언트 껍데기.
 // 사이드바를 "모바일에서는 드로어, md 이상에서는 항상 노출"로 동작시키려면
@@ -21,7 +36,7 @@ export function DashboardChrome({
 
   return (
     <div className="flex h-dvh flex-col bg-background md:flex-row">
-      {/* 모바일 전용 상단 바 — 햄버거 메뉴 + 로그아웃/테마 토글 */}
+      {/* 모바일 전용 상단 바 — 햄버거 메뉴 + 마이페이지/로그아웃/테마 토글 */}
       <header className="flex items-center justify-between border-b border-border px-3 py-2 md:hidden">
         <button
           type="button"
@@ -32,6 +47,7 @@ export function DashboardChrome({
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-1">
+          <MyPageLink />
           <LogoutButton />
           <ThemeToggle />
         </div>
@@ -51,6 +67,7 @@ export function DashboardChrome({
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* 데스크톱 전용 헤더 — 로고는 사이드바에 이미 있으므로 우측 아이콘 버튼만 담는다 */}
         <header className="hidden items-center justify-end gap-1 border-b border-border px-4 py-2 md:flex">
+          <MyPageLink />
           <LogoutButton />
           <ThemeToggle />
         </header>
