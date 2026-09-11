@@ -2,6 +2,21 @@
 
 ## 완료된 작업
 
+### 2026-09-11
+- **홈 화면 상단 인사말 추가** — 회원가입 시 입력한 이름(`user_metadata.full_name`)을 가져와서
+  "안녕하세요, OOO님"을 새 면접 시작 화면(`InterviewChat`의 `!started` 상태) 제목 위에 표시.
+  이름이 없는 계정(과거 가입 등)은 조용히 생략됨. `(dashboard)/page.tsx`를 서버 컴포넌트로 바꿔
+  `supabase.auth.getUser()`로 이름을 읽어 `InterviewChat`에 prop으로 전달
+- **일반 유저용 마이페이지(`/mypage`) 신규 구현** — 이름/비밀번호 변경 목적(이메일은 변경 불가)
+  - 2단계 구조: ①비밀번호 재확인(이메일 표시 + 비밀번호 입력 → `signInWithPassword`로 검증해야
+    통과) → ②이름/새 비밀번호 변경 폼(`supabase.auth.updateUser({ data, password })`). 비밀번호
+    입력칸은 비워두면 이름만 변경됨. 나중에 회원탈퇴 기능을 추가할 때 이 재인증 단계를 그대로
+    재사용할 수 있게 구조를 잡아둠(아직 탈퇴 기능 자체는 구현 안 함 — 범위 밖)
+  - `DashboardChrome` 헤더(모바일/데스크톱 둘 다)에 `UserCog` 아이콘으로 마이페이지 링크 추가
+  - Supabase 에러 메시지 한글화 함수(`translateAuthError`)가 `AuthForm.tsx`에 로컬로만 있던 것을
+    `src/lib/supabase/authErrors.ts`로 공용 분리해서 마이페이지에서도 재사용 (중복 제거)
+- tsc/lint/build 전부 통과 확인. TypeScript/UI 변경만 있어서 schema.sql 재실행 불필요
+
 ### 2026-09-07 (계속 7)
 - **추이 차트에 좌우 화살표 스크롤 버튼 추가** (사용자 요청 — 스크롤바를 없앤 대신 눈에 보이는
   넘김 버튼이 있으면 좋겠다는 피드백)

@@ -26,7 +26,7 @@ const EMPTY_HISTORY: HistoryByRole = {
   pressure: [],
 };
 
-export function InterviewChat() {
+export function InterviewChat({ userName }: { userName?: string | null }) {
   const router = useRouter();
   const [started, setStarted] = useState(false);
   const [interviewerIndex, setInterviewerIndex] = useState(0);
@@ -295,6 +295,8 @@ export function InterviewChat() {
     return (
       <div className="flex flex-1 flex-col items-center gap-6 overflow-y-auto px-4 py-8 text-center md:gap-8 md:px-6 md:py-12">
         <div className="flex flex-col items-center gap-3">
+          {/* 회원가입 시 입력한 이름으로 인사 — 이름이 없는(과거 가입) 계정은 조용히 생략한다 */}
+          {userName && <p className="text-sm font-medium text-muted md:text-base">안녕하세요, {userName}님</p>}
           <h1 className="max-w-md bg-linear-to-r from-orange-400 to-amber-300 bg-clip-text text-3xl font-bold tracking-tight text-transparent md:text-4xl lg:text-5xl">
             오늘의 면접관
           </h1>
