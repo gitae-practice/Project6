@@ -171,6 +171,11 @@ export function AuthForm() {
             type="button"
             onClick={() => {
               setMode(mode === "login" ? "signup" : "login");
+              // 로그인 ↔ 회원가입 전환 시 입력값이 그대로 남아있으면(특히 비밀번호) 헷갈리고,
+              // 실수로 엉뚱한 폼에 그대로 제출될 위험도 있어 전환할 때마다 깨끗이 비운다.
+              setFullName("");
+              setEmail("");
+              setPassword("");
               setError(null);
               setNotice(null);
             }}
