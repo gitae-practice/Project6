@@ -154,10 +154,12 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       setInput(listeningBaseTextRef.current + interimTranscript);
     };
     recognition.onerror = (event) => {
+      // console.debug는 크롬 콘솔 기본 필터("Verbose" 꺼짐)에서 아예 안 보일 수 있어서
+      // console.log/console.warn으로 남긴다 — 진단용 로그가 안 보이면 원인 파악 자체가 안 된다.
       // "no-speech"(말을 아예 안 함)와 "aborted"(사용자가 버튼으로 직접 멈춤)는 실패라기보다
-      // 자연스러운 상황이라 콘솔에만 남기고 화면에는 에러로 보여주지 않는다.
+      // 자연스러운 상황이라 화면에는 에러로 보여주지 않지만, 콘솔에는 남긴다.
       if (event.error === "no-speech" || event.error === "aborted") {
-        console.debug("음성 인식 종료:", event.error);
+        console.log("[음성인식] 종료:", event.error);
         return;
       }
       console.error("음성 인식 오류:", event.error, event.message);
@@ -168,13 +170,22 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     // 단계 문제인지, 그 뒤 인식 엔진(네트워크) 단계 문제인지 구분하려고 남기는 진단용 로그다.
     // 예) onaudiostart조차 안 찍히면 브라우저가 마이크 자체를 못 받아온 것(OS 마이크 권한/장치
     // 문제일 가능성이 크고, onspeechstart는 찍히는데 결과가 없으면 인식 서버 통신 문제일 수 있다.
-    recognition.onaudiostart = () => console.debug("[음성인식] 마이크 캡처 시작");
-    recognition.onaudioend = () => console.debug("[음성인식] 마이크 캡처 종료");
-    recognition.onspeechstart = () => console.debug("[음성인식] 말소리 감지됨");
-    recognition.onspeechend = () => console.debug("[음성인식] 말소리 끝남");
+    recognition.onstart = () => console.log("[음성인식] 시작됨 (recognition.start() 호출 성공)");
+    recognition.onaudiostart = () => console.log("[음성인식] 마이크 캡처 시작");
+    recognition.onaudioend = () => console.log("[음성인식] 마이크 캡처 종료");
+    recognition.onspeechstart = () => console.log("[음성인식] 말소리 감지됨");
+    recognition.onspeechend = () => console.log("[음성인식] 말소리 끝남");
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      // start()는 이미 시작된 인스턴스를 다시 시작하려 할 때 등 특정 상황에서 동기적으로
+      // 예외를 던질 수 있다 — 이걸 못 잡으면 아무 로그도 안 남고 조용히 멈춘 것처럼 보인다.
+      console.error("[음성인식] start() 호출 실패:", err);
+      setSttError("마이크를 시작하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.");
+      return;
+    }
     setIsListening(true);
   }
 
@@ -191,7 +202,13 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     const voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) return null;
     const koreanVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("ko"));
-    const pool = koreanVoices.length > 0 ? koreanVoices : voices;
+    const candidates = koreanVoices.length > 0 ? koreanVoices : voices;
+    // 크롬 목소리 목록엔 "Google 한국의"처럼 네트워크(원격 서버)로 합성하는 목소리가 끼어있는
+    // 경우가 있는데, 이게 몇몇 크롬 버전/환경에서 에러도 없이 그냥 조용히 재생을 안 하는 경우가
+    // 보고돼 있다 — 그래서 기기에 실제 설치된(localService) 목소리를 우선한다. (기술 면접관만
+    // 유독 안 들리던 게, 항상 배열 0번 목소리를 쓰는데 그게 하필 네트워크 목소리였을 가능성이 큼)
+    const localCandidates = candidates.filter((v) => v.localService);
+    const pool = localCandidates.length > 0 ? localCandidates : candidates;
     return pool[INTERVIEWER_ORDER.indexOf(role) % pool.length];
   }
 
@@ -209,11 +226,18 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       if (voice) utterance.voice = voice;
       utterance.pitch = ROLE_VOICE_STYLE[role].pitch;
       utterance.rate = ROLE_VOICE_STYLE[role].rate;
+      // 어떤 목소리가 배정됐는지, 실제로 재생이 "시작"됐는지까지 남겨서 특정 면접관만 안 들리는
+      // 문제가 목소리 자체(network voice 등) 때문인지 확인할 수 있게 한다.
+      console.log(
+        `[음성합성] ${role} 역할에 배정된 목소리:`,
+        voice ? `${voice.name} (${voice.lang}, ${voice.localService ? "로컬" : "네트워크"})` : "(없음 — 브라우저 기본값 사용)"
+      );
+      utterance.onstart = () => console.log(`[음성합성] ${role} 재생 시작됨`);
       utterance.onerror = (event) => {
         // "interrupted"는 다음 발화를 재생하려고 우리가 직접 cancel()해서 생기는 정상적인
         // 부작용이라 에러가 아니다 — 그 외의 경우만 실제 실패로 보고 로그를 남긴다.
         if (event.error !== "interrupted" && event.error !== "canceled") {
-          console.error("음성 합성 오류:", event.error);
+          console.error(`[음성합성] ${role} 재생 오류:`, event.error);
         }
       };
       synth.speak(utterance);
