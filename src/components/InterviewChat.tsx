@@ -164,6 +164,14 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       setSttError(translateSpeechError(event.error));
     };
     recognition.onend = () => setIsListening(false); // 한 문장 인식이 끝나면(또는 무음 타임아웃) 자동으로 꺼진다
+    // 아래 4개는 "듣고 있는 것처럼 보이는데 텍스트가 안 채워진다"는 문제가 마이크(오디오 캡처)
+    // 단계 문제인지, 그 뒤 인식 엔진(네트워크) 단계 문제인지 구분하려고 남기는 진단용 로그다.
+    // 예) onaudiostart조차 안 찍히면 브라우저가 마이크 자체를 못 받아온 것(OS 마이크 권한/장치
+    // 문제일 가능성이 크고, onspeechstart는 찍히는데 결과가 없으면 인식 서버 통신 문제일 수 있다.
+    recognition.onaudiostart = () => console.debug("[음성인식] 마이크 캡처 시작");
+    recognition.onaudioend = () => console.debug("[음성인식] 마이크 캡처 종료");
+    recognition.onspeechstart = () => console.debug("[음성인식] 말소리 감지됨");
+    recognition.onspeechend = () => console.debug("[음성인식] 말소리 끝남");
 
     recognitionRef.current = recognition;
     recognition.start();
@@ -211,14 +219,37 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       synth.speak(utterance);
     }
 
+    // 일부 브라우저는 페이지 로드 직후엔 목소리 목록이 비어 있다가 뒤늦게(비동기로) 채워진다.
+    // 문제는 "voiceschanged"가 우리가 리스너를 달기도 전에 이미 한 번 발생해버렸을 수도 있다는
+    // 것 — 그러면 이 리스너는 영원히 다시 안 불려서 첫 재생 시도가 통째로 조용히 멈춰버린다
+    // (실제로 "기술 면접관 첫 질문은 안 들리는데, 다음 면접관부턴 잘 들린다"는 증상으로 나타남 —
+    // 그때쯤엔 이미 목소리 목록이 채워져 있어 정상 경로를 타기 때문). 그래서 이벤트를 무한정
+    // 기다리지 않고, 짧게(300ms)만 기다렸다가 그래도 안 채워지면 목소리 없이라도 재생을 시도한다.
+    function speakWhenVoicesReady() {
+      if (synth.getVoices().length > 0) {
+        doSpeak();
+        return;
+      }
+      let alreadySpoken = false;
+      const onVoicesChanged = () => {
+        if (alreadySpoken) return;
+        alreadySpoken = true;
+        doSpeak();
+      };
+      synth.addEventListener("voiceschanged", onVoicesChanged, { once: true });
+      setTimeout(() => {
+        if (alreadySpoken) return;
+        alreadySpoken = true;
+        synth.removeEventListener("voiceschanged", onVoicesChanged);
+        doSpeak();
+      }, 300);
+    }
+
     if (synth.speaking || synth.pending) {
       synth.cancel();
-      setTimeout(doSpeak, 50);
-    } else if (synth.getVoices().length === 0) {
-      // 일부 브라우저는 페이지 로드 직후엔 목소리 목록이 비어 있다가 뒤늦게 채워진다.
-      synth.addEventListener("voiceschanged", doSpeak, { once: true });
+      setTimeout(speakWhenVoicesReady, 50);
     } else {
-      doSpeak();
+      speakWhenVoicesReady();
     }
   }
 
