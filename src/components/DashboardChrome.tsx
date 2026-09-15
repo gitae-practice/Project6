@@ -33,6 +33,10 @@ export function DashboardChrome({
   children: ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // "새 면접 시작"을 눌렀을 때, 이미 "/"에 있으면(면접 진행 중이어도) Link가 같은 경로라 아무
+  // 네비게이션도 안 일어나서 InterviewChat의 내부 상태(진행 중이던 면접)가 그대로 남는 버그가
+  // 있었다. 이 값을 바꿔서 children을 강제로 다시 마운트시켜 우회한다.
+  const [resetKey, setResetKey] = useState(0);
 
   return (
     <div className="flex h-dvh flex-col bg-background md:flex-row">
@@ -62,7 +66,12 @@ export function DashboardChrome({
         />
       )}
 
-      <HistorySidebar items={items} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <HistorySidebar
+        items={items}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onNewInterview={() => setResetKey((k) => k + 1)}
+      />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* 데스크톱 전용 헤더 — 로고는 사이드바에 이미 있으므로 우측 아이콘 버튼만 담는다 */}
@@ -71,7 +80,9 @@ export function DashboardChrome({
           <LogoutButton />
           <ThemeToggle />
         </header>
-        {children}
+        <div key={resetKey} className="contents">
+          {children}
+        </div>
       </div>
     </div>
   );

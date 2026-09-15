@@ -20,12 +20,16 @@ interface HistorySidebarProps {
   // 모바일 드로어 상태 — md 이상에서는 사용하지 않고 항상 노출된다.
   isOpen: boolean;
   onClose: () => void;
+  // 이미 "/"에 있을 때(예: 면접 진행 중) "새 면접 시작"을 눌러도 Link는 같은 경로라 아무 일도
+  // 안 일어나던 버그가 있었다 — DashboardChrome이 이 콜백으로 화면을 강제로 다시 마운트해서
+  // InterviewChat의 내부 상태(진행 중이던 면접)를 초기 화면으로 되돌린다.
+  onNewInterview: () => void;
 }
 
 // 좌측 사이드바 — 로그인 후 화면 왼쪽에 항상 떠 있는 지난 면접 기록 목록.
 // 목록 데이터는 서버 컴포넌트(layout.tsx)에서 미리 조회해 props로 내려받는다.
 // 모바일(md 미만)에서는 fixed 드로어로 동작하고, md 이상에서는 항상 고정 노출되는 사이드바가 된다.
-export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) {
+export function HistorySidebar({ items, isOpen, onClose, onNewInterview }: HistorySidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -77,7 +81,10 @@ export function HistorySidebar({ items, isOpen, onClose }: HistorySidebarProps) 
       <div className="px-3 pb-3">
         <Link
           href="/"
-          onClick={onClose}
+          onClick={() => {
+            onClose();
+            onNewInterview();
+          }}
           className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
             pathname === "/"
               ? "border-accent bg-accent/10 text-accent"

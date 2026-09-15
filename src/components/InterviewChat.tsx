@@ -194,8 +194,8 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   // 그와 별개로 pitch/rate를 역할별로 다르게 둬서 voice가 하나뿐이어도 최소한 톤 차이는 나게 한다.
   const ROLE_VOICE_STYLE: Record<InterviewerRole, { pitch: number; rate: number }> = {
     technical: { pitch: 1, rate: 1 },
-    personality: { pitch: 1.15, rate: 0.95 },
-    pressure: { pitch: 0.85, rate: 1.05 },
+    personality: { pitch: 1.4, rate: 0.92 }, // 더 높고 느긋하게 — 실제 목소리가 하나뿐이어도 확실히 다르게 들리도록 차이를 크게 둠
+    pressure: { pitch: 0.7, rate: 1.15 }, // 더 낮고 빠르게
   };
 
   function pickVoiceForRole(role: InterviewerRole): SpeechSynthesisVoice | null {
@@ -451,6 +451,10 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   }
 
   function handleNextInterviewer() {
+    // 이전 면접관 답변이 아직 음성으로 재생 중이면 여기서 바로 끊는다 — 안 그러면 다음 면접관의
+    // 질문이 나오기 전까지(스트리밍이 끝날 때까지) 이전 목소리가 계속 흘러나오게 된다.
+    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+
     const nextIndex = interviewerIndex + 1;
     if (nextIndex >= INTERVIEWER_ORDER.length) {
       setFinished(true);
