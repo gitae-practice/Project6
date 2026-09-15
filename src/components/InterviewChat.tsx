@@ -196,10 +196,13 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   // 면접관마다 목소리를 다르게 들리게 한다 — 실제 목소리(voice) 자체는 시스템/브라우저에 설치된
   // 한국어 음성 개수만큼만 서로 다르게 배정되고(하나만 있으면 셋 다 같은 voice를 쓰게 됨),
   // 그와 별개로 pitch/rate를 역할별로 다르게 둬서 voice가 하나뿐이어도 최소한 톤 차이는 나게 한다.
+  // pitch는 스펙상 0~2(기본 1) 범위인데, 이전에 1.4/0.7 정도로는 사용자가 "다 똑같은 목소리"로
+  // 느낄 만큼 체감 차이가 작았다 — 시스템에 로컬 한국어 목소리가 1개뿐이면 결국 pitch/rate 차이가
+  // 유일한 구분 수단이라, 한계치에 가깝게 확 벌려서 확실히 다르게 들리도록 한다.
   const ROLE_VOICE_STYLE: Record<InterviewerRole, { pitch: number; rate: number }> = {
     technical: { pitch: 1, rate: 1 },
-    personality: { pitch: 1.4, rate: 0.92 }, // 더 높고 느긋하게 — 실제 목소리가 하나뿐이어도 확실히 다르게 들리도록 차이를 크게 둠
-    pressure: { pitch: 0.7, rate: 1.15 }, // 더 낮고 빠르게
+    personality: { pitch: 1.8, rate: 0.85 }, // 훨씬 높고 느긋하게
+    pressure: { pitch: 0.5, rate: 1.25 }, // 훨씬 낮고 빠르게
   };
 
   function pickVoiceForRole(role: InterviewerRole): SpeechSynthesisVoice | null {
@@ -784,6 +787,19 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
                       <CurrentIcon className={`h-3 w-3 ${currentAccent.text}`} />
                     </span>
                     {INTERVIEWER_META[currentRole].label}
+                    {/* 메시지 하나하나를 다시 들어볼 수 있는 버튼 — 자동 안내(토글)와 별개로,
+                        스트리밍이 끝난 메시지에만 보여준다 */}
+                    {speechSynthesisSupported && message.content && !(isStreaming && i === currentMessages.length - 1) && (
+                      <button
+                        type="button"
+                        onClick={() => speak(message.content, currentRole)}
+                        aria-label="이 답변 다시 듣기"
+                        title="다시 듣기"
+                        className="text-muted transition-colors hover:text-accent"
+                      >
+                        <Volume2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </span>
                   <div className="glass-card rounded-xl px-4 py-3 leading-relaxed whitespace-pre-wrap">
                     {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
