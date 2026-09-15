@@ -80,10 +80,11 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     !isExtractingResume &&
     !isExtractingPortfolio;
 
-  // 새 메시지가 추가될 때마다 대화창을 맨 아래로 스크롤
+  // 새 메시지가 추가될 때마다, 그리고 스트리밍이 끝나 "다음 면접관으로" 버튼이 나타날 때도
+  // 대화창을 맨 아래로 스크롤해서 버튼이 가려지지 않게 한다.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [currentMessages]);
+  }, [currentMessages, isStreaming]);
 
   // 브라우저의 음성 인식/음성 합성 지원 여부를 확인한다. effect 본문에서 setState를 바로
   // 동기 호출하면 react-hooks/set-state-in-effect에 걸리므로 microtask로 한 틱 미뤄서 호출한다.
@@ -756,7 +757,10 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
         )}
       </div>
 
-      {/* 대화 목록 */}
+      {/* 대화 목록 — "다음 면접관으로" 버튼도 이 스크롤 영역 안(대화 마지막)에 같이 둔다.
+          예전엔 이 버튼을 스크롤 영역과 입력창 사이의 별도 줄로 뒀는데, 그러면 버튼이 나타나고
+          사라질 때마다 입력창 높이 배분이 바뀌면서 입력창 위치가 위아래로 흔들려 보였다.
+          버튼을 스크롤 영역 안으로 옮기면 입력창은 항상 화면 맨 아래 같은 자리에 고정된다. */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 md:px-4 md:py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {currentMessages
@@ -784,33 +788,33 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
                 </div>
               )
             )}
+
+          {/* 다음 면접관으로 넘어가기 (스트리밍이 끝난 뒤에만 노출) — hover 시 다음 면접관의 포인트 컬러로 채워진다 */}
+          {!isStreaming && currentMessages.length > 1 && (
+            <div className="flex justify-center pt-2">
+              {(() => {
+                const isLast = interviewerIndex + 1 >= INTERVIEWER_ORDER.length;
+                const nextAccent = isLast ? null : INTERVIEWER_ACCENT[INTERVIEWER_ORDER[interviewerIndex + 1]];
+                return (
+                  <button
+                    type="button"
+                    onClick={handleNextInterviewer}
+                    className={`rounded-xl border px-5 py-2 text-sm font-medium transition-colors ${
+                      nextAccent
+                        ? `${nextAccent.softBorder} ${nextAccent.text} ${nextAccent.hoverBg} hover:border-transparent hover:text-white`
+                        : "border-accent/40 text-accent hover:bg-accent hover:text-white"
+                    }`}
+                  >
+                    {isLast
+                      ? "면접 마치기"
+                      : `다음 면접관(${INTERVIEWER_META[INTERVIEWER_ORDER[interviewerIndex + 1]].label})으로`}
+                  </button>
+                );
+              })()}
+            </div>
+          )}
         </div>
       </div>
-
-      {/* 다음 면접관으로 넘어가기 (스트리밍이 끝난 뒤에만 노출) — hover 시 다음 면접관의 포인트 컬러로 채워진다 */}
-      {!isStreaming && currentMessages.length > 1 && (
-        <div className="flex justify-center border-t border-border px-3 py-3 md:px-4">
-          {(() => {
-            const isLast = interviewerIndex + 1 >= INTERVIEWER_ORDER.length;
-            const nextAccent = isLast ? null : INTERVIEWER_ACCENT[INTERVIEWER_ORDER[interviewerIndex + 1]];
-            return (
-              <button
-                type="button"
-                onClick={handleNextInterviewer}
-                className={`rounded-xl border px-5 py-2 text-sm font-medium transition-colors ${
-                  nextAccent
-                    ? `${nextAccent.softBorder} ${nextAccent.text} ${nextAccent.hoverBg} hover:border-transparent hover:text-white`
-                    : "border-accent/40 text-accent hover:bg-accent hover:text-white"
-                }`}
-              >
-                {isLast
-                  ? "면접 마치기"
-                  : `다음 면접관(${INTERVIEWER_META[INTERVIEWER_ORDER[interviewerIndex + 1]].label})으로`}
-              </button>
-            );
-          })()}
-        </div>
-      )}
 
       {/* 답변 입력창 — 화면 하단에 고정되는 느낌을 주는 프로스티드 바 */}
       <form onSubmit={handleSubmit} className="border-t border-border bg-surface/80 p-3 backdrop-blur md:p-4">
