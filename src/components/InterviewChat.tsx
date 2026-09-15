@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Home, Check } from "lucide-react";
+import { Send, Home, Check, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import {
   INTERVIEWER_ORDER,
   INTERVIEWER_META,
@@ -49,6 +49,17 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // 음성 입출력(STT/TTS) — 둘 다 브라우저 내장 Web Speech API라 서버/API 키가 필요 없다.
+  // Chrome/Edge 계열만 안정적으로 지원해서, 지원 여부를 감지해 버튼 자체를 숨긴다(기능 저하가 아니라
+  // 아예 안 보이게). SSR 시점엔 window가 없으므로 최초 렌더는 항상 false로 시작해서 하이드레이션
+  // 불일치가 나지 않게 하고, 마운트 후 지원 여부를 다시 확인해 반영한다.
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
+  const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false);
+  const [isListening, setIsListening] = useState(false); // 마이크로 답변을 받아쓰는 중인지
+  const [isTtsEnabled, setIsTtsEnabled] = useState(false); // 면접관 질문을 음성으로 읽어줄지 (기본 꺼짐)
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const listeningBaseTextRef = useRef(""); // 녹음을 시작한 시점까지 이미 입력해둔 텍스트 — 그 뒤에 이어붙인다
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentRole = INTERVIEWER_ORDER[interviewerIndex];
   const CurrentIcon = INTERVIEWER_ICON[currentRole];
@@ -72,6 +83,76 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [currentMessages]);
+
+  // 브라우저의 음성 인식/음성 합성 지원 여부를 확인한다. effect 본문에서 setState를 바로
+  // 동기 호출하면 react-hooks/set-state-in-effect에 걸리므로 microtask로 한 틱 미뤄서 호출한다.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setSpeechRecognitionSupported(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
+      setSpeechSynthesisSupported("speechSynthesis" in window);
+    });
+  }, []);
+
+  // 화면을 벗어날 때 혹시 마이크가 켜져 있거나 음성이 재생 중이면 정리한다.
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  // 마이크 버튼 — 누르면 녹음 시작/종료를 토글한다. 인식된 말은 실시간으로(중간 결과 포함)
+  // 입력창에 반영되고, 문장이 확정될 때마다(isFinal) 그 뒤에 이어붙인다.
+  function toggleListening() {
+    if (isListening) {
+      recognitionRef.current?.stop(); // onend에서 isListening을 꺼준다
+      return;
+    }
+
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    listeningBaseTextRef.current = input; // 이미 입력해둔 내용은 지우지 않고 그 뒤에 이어붙인다
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "ko-KR";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          listeningBaseTextRef.current = `${listeningBaseTextRef.current}${transcript} `;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      setInput(listeningBaseTextRef.current + interimTranscript);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
+
+  // 면접관의 답변을 음성으로 읽어준다. 이전에 읽던 게 남아있으면 끊고 새로 읽는다.
+  function speak(text: string) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "ko-KR";
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function toggleTts() {
+    setIsTtsEnabled((prev) => {
+      if (prev) window.speechSynthesis?.cancel(); // 끄는 순간 읽던 것도 바로 멈춘다
+      return !prev;
+    });
+  }
 
   // Claude 스트리밍 응답(SSE)을 받아 현재 면접관의 대화 기록에 실시간으로 반영한다.
   async function sendMessage(role: InterviewerRole, messages: ChatTurn[]) {
@@ -118,6 +199,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let finalContent = ""; // TTS용으로 스트리밍 중인 답변 전체를 따로 모아둔다
 
     while (true) {
       const { done, value } = await reader.read();
@@ -140,6 +222,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
         if (payload.sessionId) setSessionId(payload.sessionId);
 
         if (payload.text) {
+          finalContent += payload.text;
           setHistory((prev) => {
             const updated = [...prev[role]];
             const last = updated[updated.length - 1];
@@ -165,6 +248,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     }
 
     setIsStreaming(false);
+    if (isTtsEnabled) speak(finalContent); // 답변이 다 끊긴 뒤 한 번에 읽어준다 (토큰마다 끊어 읽으면 부자연스러움)
   }
 
   // 이력서 PDF를 업로드하면 Claude가 직접 내용을 읽어 텍스트로 옮기고, 그 결과를 기억해둔다.
@@ -226,6 +310,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!input.trim() || isStreaming) return;
+    if (isListening) recognitionRef.current?.stop(); // 답변을 보내면서 마이크가 켜져 있으면 같이 꺼준다
 
     const userTurn: ChatTurn = { role: "user", content: input.trim() };
     const nextMessages = [...currentMessages, userTurn];
@@ -250,6 +335,8 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
 
   // 면접 종료 후 처음 상태로 되돌려서 새로 시작할 수 있게 한다.
   function handleRestart() {
+    recognitionRef.current?.stop();
+    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     setStarted(false);
     setFinished(false);
     setInterviewerIndex(0);
@@ -514,10 +601,25 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
         >
           <CurrentIcon className={`h-5 w-5 ${currentAccent.text}`} />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-medium">{INTERVIEWER_META[currentRole].label}</p>
           <p className="truncate text-xs text-muted">{INTERVIEWER_META[currentRole].description}</p>
         </div>
+        {/* 면접관 질문을 음성으로 읽어줄지 토글 — 기본은 꺼짐(브라우저 자동재생 정책상 사용자가
+            직접 눌러야 이후 재생이 안정적으로 동작하기도 하고, 갑자기 소리가 나면 당황스러우니까) */}
+        {speechSynthesisSupported && (
+          <button
+            type="button"
+            onClick={toggleTts}
+            aria-label={isTtsEnabled ? "음성 안내 끄기" : "음성 안내 켜기"}
+            title={isTtsEnabled ? "음성 안내 끄기" : "면접관 질문을 음성으로 듣기"}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
+              isTtsEnabled ? `${currentAccent.softBg} ${currentAccent.text}` : "text-muted hover:bg-border hover:text-foreground"
+            }`}
+          >
+            {isTtsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
+        )}
       </div>
 
       {/* 대화 목록 */}
@@ -592,6 +694,23 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
               }
             }}
           />
+          {/* 마이크로 답변 받아쓰기 — 지원하는 브라우저(Chrome/Edge)에서만 보여준다.
+              녹음 중에는 빨간색으로 은은하게 깜빡여서 지금 듣고 있다는 걸 알려준다. */}
+          {speechRecognitionSupported && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              aria-label={isListening ? "음성 입력 중지" : "음성으로 답변 입력"}
+              title={isListening ? "음성 입력 중지" : "마이크로 답변 입력"}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                isListening
+                  ? "animate-pulse border-red-400/40 bg-red-400/10 text-red-400"
+                  : "border-border text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+          )}
           <button
             type="submit"
             disabled={isStreaming || !input.trim()}
