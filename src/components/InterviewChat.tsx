@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Home, Check, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Send, Home, Check, Mic, MicOff, Volume2, VolumeX, Pause, Play, RotateCcw } from "lucide-react";
 import {
   INTERVIEWER_ORDER,
   INTERVIEWER_META,
@@ -61,6 +61,11 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   // 전환 시점에 유독 재생이 안 되는 경우가 있었는데, 세션 시작부터 켜두면 그 전환 자체가
   // 없어져서 그 문제를 피해갈 수 있다.
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
+  // 지금 재생 중(또는 일시정지 중)인 메시지가 어떤 것인지 — 메시지별 다시 듣기 버튼이 "재생/
+  // 일시정지/처음부터"를 올바르게 보여주려면 어떤 발화가 지금 것인지 알아야 한다. 자동 안내
+  // (sendMessage 끝에서 호출)처럼 특정 메시지에 묶이지 않는 재생은 key 없이 호출되므로 여기 안 잡힌다.
+  const [activeSpeechKey, setActiveSpeechKey] = useState<string | null>(null);
+  const [isSpeechPaused, setIsSpeechPaused] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const listeningBaseTextRef = useRef(""); // 녹음을 시작한 시점까지 이미 입력해둔 텍스트 — 그 뒤에 이어붙인다
 
@@ -222,7 +227,9 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   // 면접관의 답변을 음성으로 읽어준다. 이전에 읽던 게 남아있으면 끊고 새로 읽는다.
   // 주의: Chrome은 cancel() 직후 바로 speak()를 호출하면 새 발화가 씹혀서 아예 소리가 안 나는
   // 버그가 있다 — 뭔가 말하고 있을 때만 cancel()하고, 그 다음 speak()는 한 틱 미뤄서 호출한다.
-  function speak(text: string, role: InterviewerRole) {
+  // key를 넘기면(메시지별 다시 듣기 버튼에서 사용) activeSpeechKey/isSpeechPaused를 갱신해서
+  // 그 버튼이 재생/일시정지 상태를 정확히 보여줄 수 있게 한다. 자동 안내 호출은 key 없이 부른다.
+  function speak(text: string, role: InterviewerRole, key?: string) {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
     const synth = window.speechSynthesis;
 
@@ -239,8 +246,17 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
         `[음성합성] ${role} 역할에 배정된 목소리:`,
         voice ? `${voice.name} (${voice.lang}, ${voice.localService ? "로컬" : "네트워크"})` : "(없음 — 브라우저 기본값 사용)"
       );
-      utterance.onstart = () => console.log(`[음성합성] ${role} 재생 시작됨`);
+      if (key) {
+        utterance.onstart = () => {
+          setActiveSpeechKey(key);
+          setIsSpeechPaused(false);
+        };
+        utterance.onpause = () => setIsSpeechPaused(true);
+        utterance.onresume = () => setIsSpeechPaused(false);
+        utterance.onend = () => setActiveSpeechKey((cur) => (cur === key ? null : cur));
+      }
       utterance.onerror = (event) => {
+        if (key) setActiveSpeechKey((cur) => (cur === key ? null : cur));
         // "interrupted"는 다음 발화를 재생하려고 우리가 직접 cancel()해서 생기는 정상적인
         // 부작용이라 에러가 아니다 — 그 외의 경우만 실제 실패로 보고 로그를 남긴다.
         if (event.error !== "interrupted" && event.error !== "canceled") {
@@ -684,8 +700,8 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* 진행 상태 표시: 스텝 프로그레스 바 — 완료/현재/대기 상태를 원과 연결선으로 표현
-          모바일에서는 라벨 텍스트를 숨기고 아이콘 + 순번만 보여준다 */}
+      {/* 진행 상태 표시: 스텝 프로그레스 바 — 완료/현재/대기 상태를 원과 연결선으로 표현.
+          모바일에서도 면접관 이름을 그대로 보여준다(글자만 살짝 작게) */}
       <div className="flex items-center justify-center border-b border-border px-2 py-4 md:px-4 md:py-5">
         {INTERVIEWER_ORDER.map((role, i) => {
           const Icon = INTERVIEWER_ICON[role];
@@ -706,17 +722,9 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
                 >
                   {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </span>
-                {/* 모바일: 순번만 표시 */}
+                {/* 모바일에서도 이름을 그대로 보여준다 — 글자 크기만 살짝 줄여서 좁은 화면에 맞춘다 */}
                 <span
-                  className={`text-xs font-semibold md:hidden ${
-                    current ? accent.text : done ? "text-muted" : "text-neutral-600"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                {/* md 이상: 전체 라벨 표시 */}
-                <span
-                  className={`hidden text-xs whitespace-nowrap md:inline ${
+                  className={`text-[10px] whitespace-nowrap md:text-xs ${
                     current ? `font-semibold ${accent.text}` : done ? "text-muted" : "text-neutral-600"
                   }`}
                 >
@@ -788,18 +796,47 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
                     </span>
                     {INTERVIEWER_META[currentRole].label}
                     {/* 메시지 하나하나를 다시 들어볼 수 있는 버튼 — 자동 안내(토글)와 별개로,
-                        스트리밍이 끝난 메시지에만 보여준다 */}
-                    {speechSynthesisSupported && message.content && !(isStreaming && i === currentMessages.length - 1) && (
-                      <button
-                        type="button"
-                        onClick={() => speak(message.content, currentRole)}
-                        aria-label="이 답변 다시 듣기"
-                        title="다시 듣기"
-                        className="text-muted transition-colors hover:text-accent"
-                      >
-                        <Volume2 className="h-3 w-3" />
-                      </button>
-                    )}
+                        스트리밍이 끝난 메시지에만 보여준다. 재생 중인 메시지는 일시정지/재개
+                        버튼과 처음부터 다시 듣기 버튼 두 개를, 그 외에는 재생 버튼 하나만 보여준다. */}
+                    {speechSynthesisSupported &&
+                      message.content &&
+                      !(isStreaming && i === currentMessages.length - 1) &&
+                      (() => {
+                        const speechKey = `${currentRole}-${i}`;
+                        const isActive = activeSpeechKey === speechKey;
+                        return isActive ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => (isSpeechPaused ? window.speechSynthesis.resume() : window.speechSynthesis.pause())}
+                              aria-label={isSpeechPaused ? "재생" : "일시정지"}
+                              title={isSpeechPaused ? "재생" : "일시정지"}
+                              className="text-accent transition-colors hover:opacity-80"
+                            >
+                              {isSpeechPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => speak(message.content, currentRole, speechKey)}
+                              aria-label="처음부터 다시 듣기"
+                              title="처음부터 다시 듣기"
+                              className="text-muted transition-colors hover:text-accent"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => speak(message.content, currentRole, speechKey)}
+                            aria-label="이 답변 다시 듣기"
+                            title="다시 듣기"
+                            className="text-muted transition-colors hover:text-accent"
+                          >
+                            <Volume2 className="h-3 w-3" />
+                          </button>
+                        );
+                      })()}
                   </span>
                   <div className="glass-card rounded-xl px-4 py-3 leading-relaxed whitespace-pre-wrap">
                     {message.content || (isStreaming && i === currentMessages.length - 1 ? "…" : "")}
