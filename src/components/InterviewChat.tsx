@@ -56,6 +56,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
   const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false);
   const [isListening, setIsListening] = useState(false); // 마이크로 답변을 받아쓰는 중인지
+  const [sttError, setSttError] = useState<string | null>(null); // 권한 거부/네트워크 오류 등 원인을 보여준다
   const [isTtsEnabled, setIsTtsEnabled] = useState(false); // 면접관 질문을 음성으로 읽어줄지 (기본 꺼짐)
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const listeningBaseTextRef = useRef(""); // 녹음을 시작한 시점까지 이미 입력해둔 텍스트 — 그 뒤에 이어붙인다
@@ -101,6 +102,24 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     };
   }, []);
 
+  // 브라우저가 주는 음성 인식 에러 코드를 한글로 바꿔서 화면에 보여준다 — 이게 없으면
+  // "마이크는 켜졌는데 아무 반응이 없다"는 상황에서 원인(권한/네트워크/무음)을 전혀 알 수 없다.
+  function translateSpeechError(code: string): string {
+    switch (code) {
+      case "not-allowed":
+      case "service-not-allowed":
+        return "마이크 권한이 꺼져 있습니다. 브라우저 주소창 옆 권한 설정에서 허용해주세요.";
+      case "no-speech":
+        return "음성이 감지되지 않았습니다. 다시 시도해주세요.";
+      case "audio-capture":
+        return "마이크를 찾을 수 없습니다. 연결 상태를 확인해주세요.";
+      case "network":
+        return "네트워크 오류로 음성 인식에 실패했습니다. (인터넷 연결 또는 방화벽을 확인해주세요)";
+      default:
+        return `음성 인식 중 오류가 발생했습니다. (${code})`;
+    }
+  }
+
   // 마이크 버튼 — 누르면 녹음 시작/종료를 토글한다. 인식된 말은 실시간으로(중간 결과 포함)
   // 입력창에 반영되고, 문장이 확정될 때마다(isFinal) 그 뒤에 이어붙인다.
   function toggleListening() {
@@ -112,6 +131,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) return;
 
+    setSttError(null);
     listeningBaseTextRef.current = input; // 이미 입력해둔 내용은 지우지 않고 그 뒤에 이어붙인다
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = "ko-KR";
@@ -130,7 +150,15 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       }
       setInput(listeningBaseTextRef.current + interimTranscript);
     };
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = (event) => {
+      console.error("음성 인식 오류:", event.error, event.message);
+      // "no-speech"는 그냥 잠깐 조용했다는 뜻이라 continuous 모드에서는 흔히 발생 — 굳이 에러로
+      // 보여주지 않고 계속 듣는 상태를 유지한다. 그 외에는 정말 실패한 것이므로 사용자에게 알린다.
+      if (event.error !== "no-speech") {
+        setSttError(translateSpeechError(event.error));
+        setIsListening(false);
+      }
+    };
     recognition.onend = () => setIsListening(false);
 
     recognitionRef.current = recognition;
@@ -139,12 +167,22 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   }
 
   // 면접관의 답변을 음성으로 읽어준다. 이전에 읽던 게 남아있으면 끊고 새로 읽는다.
+  // 주의: Chrome은 cancel() 직후 바로 speak()를 호출하면 새 발화가 씹혀서 아예 소리가 안 나는
+  // 버그가 있다 — 뭔가 말하고 있을 때만 cancel()하고, 그 다음 speak()는 한 틱 미뤄서 호출한다.
   function speak(text: string) {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
-    window.speechSynthesis.cancel();
+    const synth = window.speechSynthesis;
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "ko-KR";
-    window.speechSynthesis.speak(utterance);
+    utterance.onerror = (event) => console.error("음성 합성 오류:", event.error);
+
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+      setTimeout(() => synth.speak(utterance), 50);
+    } else {
+      synth.speak(utterance);
+    }
   }
 
   function toggleTts() {
@@ -680,45 +718,48 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
 
       {/* 답변 입력창 — 화면 하단에 고정되는 느낌을 주는 프로스티드 바 */}
       <form onSubmit={handleSubmit} className="border-t border-border bg-surface/80 p-3 backdrop-blur md:p-4">
-        <div className="mx-auto flex max-w-2xl items-end gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="답변을 입력하세요..."
-            rows={2}
-            className="min-w-0 flex-1 resize-none rounded-xl border border-border bg-white/6 px-3 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20 md:px-4"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-          />
-          {/* 마이크로 답변 받아쓰기 — 지원하는 브라우저(Chrome/Edge)에서만 보여준다.
-              녹음 중에는 빨간색으로 은은하게 깜빡여서 지금 듣고 있다는 걸 알려준다. */}
-          {speechRecognitionSupported && (
+        <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
+          {sttError && <p className="text-xs text-red-400">🎤 {sttError}</p>}
+          <div className="flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="답변을 입력하세요..."
+              rows={2}
+              className="min-w-0 flex-1 resize-none rounded-xl border border-border bg-white/6 px-3 py-2 outline-none transition-colors placeholder:text-neutral-500 focus:border-accent focus:ring-2 focus:ring-accent/20 md:px-4"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+            />
+            {/* 마이크로 답변 받아쓰기 — 지원하는 브라우저(Chrome/Edge)에서만 보여준다.
+                녹음 중에는 빨간색으로 은은하게 깜빡여서 지금 듣고 있다는 걸 알려준다. */}
+            {speechRecognitionSupported && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                aria-label={isListening ? "음성 입력 중지" : "음성으로 답변 입력"}
+                title={isListening ? "음성 입력 중지" : "마이크로 답변 입력"}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  isListening
+                    ? "animate-pulse border-red-400/40 bg-red-400/10 text-red-400"
+                    : "border-border text-muted hover:border-accent hover:text-accent"
+                }`}
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+            )}
             <button
-              type="button"
-              onClick={toggleListening}
-              aria-label={isListening ? "음성 입력 중지" : "음성으로 답변 입력"}
-              title={isListening ? "음성 입력 중지" : "마이크로 답변 입력"}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                isListening
-                  ? "animate-pulse border-red-400/40 bg-red-400/10 text-red-400"
-                  : "border-border text-muted hover:border-accent hover:text-accent"
-              }`}
+              type="submit"
+              disabled={isStreaming || !input.trim()}
+              aria-label="답변 전송"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              <Send className="h-4 w-4" />
             </button>
-          )}
-          <button
-            type="submit"
-            disabled={isStreaming || !input.trim()}
-            aria-label="답변 전송"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          </div>
         </div>
       </form>
     </div>
