@@ -57,7 +57,10 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false);
   const [isListening, setIsListening] = useState(false); // 마이크로 답변을 받아쓰는 중인지
   const [sttError, setSttError] = useState<string | null>(null); // 권한 거부/네트워크 오류 등 원인을 보여준다
-  const [isTtsEnabled, setIsTtsEnabled] = useState(false); // 면접관 질문을 음성으로 읽어줄지 (기본 꺼짐)
+  // 면접관 질문을 음성으로 읽어줄지 — 기본 켜짐으로 변경(사용자 요청). 중간에 껐다 켜는
+  // 전환 시점에 유독 재생이 안 되는 경우가 있었는데, 세션 시작부터 켜두면 그 전환 자체가
+  // 없어져서 그 문제를 피해갈 수 있다.
+  const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const listeningBaseTextRef = useRef(""); // 녹음을 시작한 시점까지 이미 입력해둔 텍스트 — 그 뒤에 이어붙인다
 
