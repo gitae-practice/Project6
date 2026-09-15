@@ -60,6 +60,11 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   const [isTtsEnabled, setIsTtsEnabled] = useState(false); // 면접관 질문을 음성으로 읽어줄지 (기본 꺼짐)
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const listeningBaseTextRef = useRef(""); // 녹음을 시작한 시점까지 이미 입력해둔 텍스트 — 그 뒤에 이어붙인다
+  // Chrome은 continuous 모드라도 몇 초 조용하면 세션을 내부적으로 끊어버려서, "사용자가 아직
+  // 멈추라고 하지 않았다"는 의도를 이 ref로 따로 기억해뒀다가 끊기면 자동으로 재시작한다.
+  // recognitionRef.current를 stop()하기 전에는 항상 이 값을 먼저 false로 바꿔서, 그 뒤에 오는
+  // onend가 "의도된 종료"임을 알고 재시작하지 않게 해야 한다.
+  const shouldListenRef = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentRole = INTERVIEWER_ORDER[interviewerIndex];
@@ -97,6 +102,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   // 화면을 벗어날 때 혹시 마이크가 켜져 있거나 음성이 재생 중이면 정리한다.
   useEffect(() => {
     return () => {
+      shouldListenRef.current = false; // stop() 이후 onend가 자동 재시작하지 않게 먼저 꺼둔다
       recognitionRef.current?.stop();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     };
@@ -120,19 +126,10 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     }
   }
 
-  // 마이크 버튼 — 누르면 녹음 시작/종료를 토글한다. 인식된 말은 실시간으로(중간 결과 포함)
-  // 입력창에 반영되고, 문장이 확정될 때마다(isFinal) 그 뒤에 이어붙인다.
-  function toggleListening() {
-    if (isListening) {
-      recognitionRef.current?.stop(); // onend에서 isListening을 꺼준다
-      return;
-    }
-
+  function startRecognition() {
     const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) return;
 
-    setSttError(null);
-    listeningBaseTextRef.current = input; // 이미 입력해둔 내용은 지우지 않고 그 뒤에 이어붙인다
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = "ko-KR";
     recognition.continuous = true;
@@ -151,37 +148,80 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       setInput(listeningBaseTextRef.current + interimTranscript);
     };
     recognition.onerror = (event) => {
+      // "no-speech"는 잠깐 조용했다는 뜻일 뿐이라 콘솔만 남기고(디버그 목적) 화면엔 에러로
+      // 보여주지 않는다 — 어차피 onend가 뒤따라오고, 거기서 알아서 재시작(아래) 처리한다.
+      if (event.error === "no-speech") {
+        console.debug("음성 인식: 잠시 조용해서 세션이 끊김 — 자동으로 다시 시작합니다.");
+        return;
+      }
       console.error("음성 인식 오류:", event.error, event.message);
-      // "no-speech"는 그냥 잠깐 조용했다는 뜻이라 continuous 모드에서는 흔히 발생 — 굳이 에러로
-      // 보여주지 않고 계속 듣는 상태를 유지한다. 그 외에는 정말 실패한 것이므로 사용자에게 알린다.
-      if (event.error !== "no-speech") {
-        setSttError(translateSpeechError(event.error));
+      shouldListenRef.current = false;
+      setSttError(translateSpeechError(event.error));
+    };
+    recognition.onend = () => {
+      if (shouldListenRef.current) {
+        recognition.start(); // 사용자가 아직 끄지 않았으면 끊긴 세션을 바로 다시 이어붙인다
+      } else {
         setIsListening(false);
       }
     };
-    recognition.onend = () => setIsListening(false);
 
     recognitionRef.current = recognition;
     recognition.start();
+  }
+
+  // 마이크 버튼 — 누르면 녹음 시작/종료를 토글한다. 인식된 말은 실시간으로(중간 결과 포함)
+  // 입력창에 반영되고, 문장이 확정될 때마다(isFinal) 그 뒤에 이어붙인다.
+  function toggleListening() {
+    if (isListening) {
+      shouldListenRef.current = false; // 이제 onend가 오더라도 재시작하지 않는다
+      recognitionRef.current?.stop();
+      return;
+    }
+    if (!(window.SpeechRecognition ?? window.webkitSpeechRecognition)) return;
+
+    setSttError(null);
+    listeningBaseTextRef.current = input; // 이미 입력해둔 내용은 지우지 않고 그 뒤에 이어붙인다
+    shouldListenRef.current = true;
     setIsListening(true);
+    startRecognition();
   }
 
   // 면접관의 답변을 음성으로 읽어준다. 이전에 읽던 게 남아있으면 끊고 새로 읽는다.
   // 주의: Chrome은 cancel() 직후 바로 speak()를 호출하면 새 발화가 씹혀서 아예 소리가 안 나는
   // 버그가 있다 — 뭔가 말하고 있을 때만 cancel()하고, 그 다음 speak()는 한 틱 미뤄서 호출한다.
+  // 또한 lang만 지정하고 voice를 안 정해주면, 그 언어의 목소리가 시스템에 하나도 설치되어 있지
+  // 않을 때 일부 브라우저가 에러도 없이 그냥 조용히 아무것도 재생하지 않는 경우가 있어서,
+  // 가능하면 한국어 목소리를 직접 찾아 지정하고 없으면 아무 목소리로라도 재생을 시도한다.
+  function pickVoice(): SpeechSynthesisVoice | null {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return null;
+    return voices.find((v) => v.lang.toLowerCase().startsWith("ko")) ?? voices[0];
+  }
+
   function speak(text: string) {
     if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
     const synth = window.speechSynthesis;
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "ko-KR";
-    utterance.onerror = (event) => console.error("음성 합성 오류:", event.error);
+    function doSpeak() {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ko-KR";
+      const voice = pickVoice();
+      if (voice) utterance.voice = voice;
+      else console.warn("음성 합성: 사용 가능한 목소리를 찾지 못했습니다 (시스템에 TTS 음성이 설치되어 있는지 확인해주세요).");
+      utterance.onstart = () => console.debug("음성 합성 시작:", voice?.name ?? "(기본 목소리)");
+      utterance.onerror = (event) => console.error("음성 합성 오류:", event.error);
+      synth.speak(utterance);
+    }
 
     if (synth.speaking || synth.pending) {
       synth.cancel();
-      setTimeout(() => synth.speak(utterance), 50);
+      setTimeout(doSpeak, 50);
+    } else if (synth.getVoices().length === 0) {
+      // 일부 브라우저는 페이지 로드 직후엔 목소리 목록이 비어 있다가 뒤늦게 채워진다.
+      synth.addEventListener("voiceschanged", doSpeak, { once: true });
     } else {
-      synth.speak(utterance);
+      doSpeak();
     }
   }
 
@@ -348,7 +388,10 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!input.trim() || isStreaming) return;
-    if (isListening) recognitionRef.current?.stop(); // 답변을 보내면서 마이크가 켜져 있으면 같이 꺼준다
+    if (isListening) {
+      shouldListenRef.current = false; // stop() 이후 onend가 자동 재시작하지 않게 먼저 꺼둔다
+      recognitionRef.current?.stop(); // 답변을 보내면서 마이크가 켜져 있으면 같이 꺼준다
+    }
 
     const userTurn: ChatTurn = { role: "user", content: input.trim() };
     const nextMessages = [...currentMessages, userTurn];
@@ -373,6 +416,7 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
 
   // 면접 종료 후 처음 상태로 되돌려서 새로 시작할 수 있게 한다.
   function handleRestart() {
+    shouldListenRef.current = false; // stop() 이후 onend가 자동 재시작하지 않게 먼저 꺼둔다
     recognitionRef.current?.stop();
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     setStarted(false);
