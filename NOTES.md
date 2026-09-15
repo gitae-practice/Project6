@@ -2,6 +2,24 @@
 
 ## 완료된 작업
 
+### 2026-09-15
+- **STT/TTS 음성 입출력 구현** — 둘 다 브라우저 내장 Web Speech API라 서버/API 키 없이 구현 가능
+  - **STT(음성 답변 입력)**: 입력창 옆에 마이크 버튼 추가(`SpeechRecognition`, `lang: "ko-KR"`,
+    `continuous`+`interimResults`). 녹음 중엔 실시간으로 중간 결과가 입력창에 반영되고, 문장이
+    확정될 때마다 이어붙여진다. 이미 입력해둔 텍스트는 지우지 않고 그 뒤에 계속 이어붙임. 답변
+    전송 시 자동으로 마이크도 꺼짐
+  - **TTS(면접관 질문 음성 안내)**: 면접관 프로필 헤더에 스피커 토글 추가(기본 꺼짐 — 브라우저
+    자동재생 정책 + 갑자기 소리 나는 것 방지). 켜두면 답변 스트리밍이 끝난 시점에 그 답변 전체를
+    한 번에 읽어줌(토큰 스트리밍 도중 끊어 읽으면 부자연스러워서 완료 후 일괄 재생)
+  - 둘 다 Chrome/Edge 계열만 안정 지원이라 `window.SpeechRecognition`/`webkitSpeechRecognition`,
+    `speechSynthesis` 지원 여부를 기능 감지해서 미지원 브라우저에는 버튼 자체를 숨김. SSR 시점엔
+    `window`가 없어 항상 false로 시작 → 마운트 후 `queueMicrotask`로 한 틱 미뤄서 재확인
+    (동기 호출 시 `react-hooks/set-state-in-effect`에 걸림, 이전 세션에서 겪은 것과 동일 패턴)
+  - `src/types/speech-recognition.d.ts` 신규 — TypeScript 기본 lib.dom.d.ts에 `SpeechRecognition`
+    본체 타입이 없어서(결과 타입들만 있음) 직접 앰비언트 선언 추가
+  - 화면 이탈/재시작 시 마이크·음성 재생 정리(`recognition.stop()`, `speechSynthesis.cancel()`)
+- tsc/lint/build 전부 통과 확인. TypeScript/UI 변경만 있어서 schema.sql 재실행 불필요
+
 ### 2026-09-11 (계속)
 - **로그인 ↔ 회원가입 전환 시 입력값이 그대로 남아있던 버그 수정** — 회원가입 폼에 입력한
   이메일/비밀번호(+이름)가 로그인 화면으로 전환해도 지워지지 않고 남아있던 문제. 모드 전환
