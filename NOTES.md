@@ -2,6 +2,25 @@
 
 ## 완료된 작업
 
+### 2026-09-15 (계속)
+- **STT/TTS 안 되던 문제 진단 및 수정 시도** (사용자 리포트: "말해도 실시간으로 텍스트 안 채워짐,
+  음성인식은 하는것같은데" + "음성도 안나옴")
+  - **TTS**: Chrome이 `speechSynthesis.cancel()` 직후 곧바로 `.speak()`를 호출하면 새 발화가
+    씹혀서 아예 소리가 안 나는 알려진 버그가 있음 — `speak()`가 매번 무조건 `cancel()` 후 바로
+    `speak()`하고 있었던 게 원인일 가능성이 높음. 지금 뭔가 말하고 있을 때(`synth.speaking` ||
+    `synth.pending`)만 `cancel()`하고, 그 다음 `speak()`는 `setTimeout(..., 50)`으로 한 틱 미뤄서
+    호출하도록 수정 + `utterance.onerror`로 실패 시 콘솔에 원인 로그
+  - **STT**: 마이크는 켜지는데 결과가 하나도 안 들어오면 원인(권한 거부/네트워크 오류/무음 등)을
+    전혀 알 수 없던 게 문제라 판단 — `recognition.onerror`에서 에러 코드를 콘솔에 로그 + 화면에도
+    한글로 번역해서 보여주도록 수정(`translateSpeechError`: not-allowed/network/audio-capture 등).
+    단, `no-speech`는 continuous 모드에서 흔히 발생하는 정상적인 상황이라 에러로 띄우지 않고 계속
+    듣는 상태를 유지함
+  - **중요**: 코드 검토로 확인 가능한 범위(Chrome의 cancel+speak 경합 버그, 에러 미노출)는
+    고쳤지만, 브라우저를 직접 열어 테스트하지 못했기 때문에 완전히 해결됐는지는 미확인 — 여전히
+    안 되면 이제는 화면에 뜨는 에러 메시지(또는 브라우저 콘솔의 "음성 인식 오류"/"음성 합성 오류"
+    로그)를 같이 알려줘야 원인을 좁힐 수 있음
+- tsc/lint/build 전부 통과 확인
+
 ### 2026-09-15
 - **STT/TTS 음성 입출력 구현** — 둘 다 브라우저 내장 Web Speech API라 서버/API 키 없이 구현 가능
   - **STT(음성 답변 입력)**: 입력창 옆에 마이크 버튼 추가(`SpeechRecognition`, `lang: "ko-KR"`,
