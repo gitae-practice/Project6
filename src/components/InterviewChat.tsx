@@ -460,6 +460,19 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
     startInterviewer(currentRole);
   }
 
+  // 면접관 화면을 전환한다 — 처음 만나는 면접관이면 새로 첫 질문을 받아오고(startInterviewer),
+  // 이미 대화한 적 있는 면접관(스텝 표시에서 완료 표시된 원을 눌러 뒤로 돌아가는 경우)이면
+  // 기존 대화를 그대로 보여주기만 한다. 여기서 무조건 startInterviewer를 부르면 그 면접관과
+  // 나눴던 대화가 통째로 새 질문으로 덮어써지므로 반드시 구분해야 한다.
+  function goToInterviewer(index: number) {
+    if (isStreaming) return; // 답변을 기다리는 중에는 전환하지 않는다
+    const role = INTERVIEWER_ORDER[index];
+    setInterviewerIndex(index);
+    if (history[role].length === 0) {
+      startInterviewer(role);
+    }
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!input.trim() || isStreaming) return;
@@ -484,10 +497,11 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       void generateReport(); // 마지막 면접관까지 끝났으니 바로 종합 리포트 생성 시작
       return;
     }
-    setInterviewerIndex(nextIndex);
     // sessionId는 그대로 유지 — 면접 한 판(세 명 전부) = 세션 하나로 취급해야
     // 종료 후 리포트를 만들 때 전체 대화를 한 세션으로 묶어 조회할 수 있다.
-    startInterviewer(INTERVIEWER_ORDER[nextIndex]); // 다음 면접관의 첫 질문을 바로 받아온다
+    // goToInterviewer가 처음 만나는 면접관이면 첫 질문을 받아오고, 뒤로 갔다가 다시 넘어온
+    // 거라 이미 대화가 있으면 기존 대화를 그대로 이어서 보여준다(새 질문으로 덮어쓰지 않음).
+    goToInterviewer(nextIndex);
   }
 
   // 면접 종료 후 처음 상태로 되돌려서 새로 시작할 수 있게 한다.
@@ -708,29 +722,45 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
           const accent = INTERVIEWER_ACCENT[role];
           const done = i < interviewerIndex;
           const current = i === interviewerIndex;
+          // 이미 대화한(완료된) 면접관은 눌러서 다시 돌아갈 수 있게 한다 — 진행 중이거나
+          // 아직 안 만난 면접관은 순서를 건너뛰게 되므로 클릭 대상에서 제외한다.
+          const stepInner = (
+            <>
+              <span
+                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                  done
+                    ? `${accent.border} ${accent.bg} text-white`
+                    : current
+                      ? `${accent.border} bg-transparent ${accent.text}`
+                      : "border-neutral-600 text-neutral-600"
+                }`}
+              >
+                {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+              </span>
+              {/* 모바일에서도 이름을 그대로 보여준다 — 글자 크기만 살짝 줄여서 좁은 화면에 맞춘다 */}
+              <span
+                className={`text-[10px] whitespace-nowrap md:text-xs ${
+                  current ? `font-semibold ${accent.text}` : done ? "text-muted" : "text-neutral-600"
+                }`}
+              >
+                {INTERVIEWER_META[role].label}
+              </span>
+            </>
+          );
           return (
             <div key={role} className="flex items-center">
-              <div className="flex flex-col items-center gap-1.5">
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
-                    done
-                      ? `${accent.border} ${accent.bg} text-white`
-                      : current
-                        ? `${accent.border} bg-transparent ${accent.text}`
-                        : "border-neutral-600 text-neutral-600"
-                  }`}
+              {done ? (
+                <button
+                  type="button"
+                  onClick={() => goToInterviewer(i)}
+                  title={`${INTERVIEWER_META[role].label}로 돌아가기`}
+                  className="flex flex-col items-center gap-1.5 transition-opacity hover:opacity-80"
                 >
-                  {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                </span>
-                {/* 모바일에서도 이름을 그대로 보여준다 — 글자 크기만 살짝 줄여서 좁은 화면에 맞춘다 */}
-                <span
-                  className={`text-[10px] whitespace-nowrap md:text-xs ${
-                    current ? `font-semibold ${accent.text}` : done ? "text-muted" : "text-neutral-600"
-                  }`}
-                >
-                  {INTERVIEWER_META[role].label}
-                </span>
-              </div>
+                  {stepInner}
+                </button>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5">{stepInner}</div>
+              )}
               {i < INTERVIEWER_ORDER.length - 1 && (
                 <span
                   className={`mx-1.5 mb-5 w-5 border-t-2 sm:w-8 md:mx-2 md:w-16 ${
