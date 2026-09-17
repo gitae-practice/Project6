@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
 import { DashboardChrome } from "@/components/DashboardChrome";
-import { type HistorySidebarItem } from "@/components/HistorySidebar";
+import { type HistorySidebarItem, type InProgressSidebarItem } from "@/components/HistorySidebar";
 import { createClient } from "@/lib/supabase/server";
 import { ADMIN_EMAIL } from "@/lib/admin";
 
@@ -29,26 +29,39 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     redirect("/admin");
   }
 
-  // 완료된(리포트가 있는) 지난 세션만 사이드바에 보여준다. 유저가 소프트 삭제한 세션은
-  // deleted_at이 채워져 있을 뿐 DB에는 남아있으므로(관리자 통계용) 여기서 명시적으로 제외한다.
+  // 유저가 소프트 삭제한 세션은 deleted_at이 채워져 있을 뿐 DB에는 남아있으므로(관리자 통계용)
+  // 여기서 명시적으로 제외한다. 리포트가 있으면 완료된 지난 기록, 없으면 아직 진행 중인
+  // 면접(어딘가에서 "새 면접 시작"으로 끊겼거나 브라우저를 닫고 나간 경우)으로 나눠서 보여준다.
   const { data: sessions } = await supabase
     .from("interview_sessions")
     .select("id, job_role, created_at, interview_reports(overall_score)")
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
-  const sidebarItems: HistorySidebarItem[] = (sessions ?? [])
-    .map((session) => {
-      const report = firstReport(session.interview_reports);
-      if (!report) return null;
-      return {
+  const sidebarItems: HistorySidebarItem[] = [];
+  const inProgressItems: InProgressSidebarItem[] = [];
+
+  for (const session of sessions ?? []) {
+    const report = firstReport(session.interview_reports);
+    if (report) {
+      sidebarItems.push({
         id: session.id as string,
         jobRole: session.job_role as string | null,
         createdAt: session.created_at as string,
         overallScore: report.overall_score as number,
-      };
-    })
-    .filter((item): item is HistorySidebarItem => item !== null);
+      });
+    } else {
+      inProgressItems.push({
+        id: session.id as string,
+        jobRole: session.job_role as string | null,
+        createdAt: session.created_at as string,
+      });
+    }
+  }
 
-  return <DashboardChrome items={sidebarItems}>{children}</DashboardChrome>;
+  return (
+    <DashboardChrome items={sidebarItems} inProgressItems={inProgressItems}>
+      {children}
+    </DashboardChrome>
+  );
 }

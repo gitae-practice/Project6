@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Menu, UserCog } from "lucide-react";
-import { HistorySidebar, type HistorySidebarItem } from "@/components/HistorySidebar";
+import { HistorySidebar, type HistorySidebarItem, type InProgressSidebarItem } from "@/components/HistorySidebar";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -27,9 +27,11 @@ function MyPageLink() {
 // (layout.tsx는 서버 컴포넌트라 상태를 들고 있을 수 없다)
 export function DashboardChrome({
   items,
+  inProgressItems,
   children,
 }: {
   items: HistorySidebarItem[];
+  inProgressItems: InProgressSidebarItem[];
   children: ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -68,6 +70,7 @@ export function DashboardChrome({
 
       <HistorySidebar
         items={items}
+        inProgressItems={inProgressItems}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         onNewInterview={() => setResetKey((k) => k + 1)}

@@ -2,6 +2,29 @@
 
 ## 완료된 작업
 
+### 2026-09-17 (계속)
+- **진행 중인 면접을 히스토리에서 이어서 진행할 수 있는 기능 구현** (사용자 발견/요청 — "새 면접
+  시작"으로 나가버리면 하던 면접이 DB에만 남고 다시 못 돌아갔음)
+  - 사이드바에 "진행 중인 면접" 섹션 신설(리포트 없는 세션들, 완료된 "지난 기록" 위에 표시) —
+    `(dashboard)/layout.tsx`가 기존에 한 번에 조회하던 세션 목록을 리포트 유무로
+    완료/진행중 두 그룹으로 나눔. 클릭하면 `/?resume=<세션ID>`로 이동
+  - `(dashboard)/page.tsx`가 `resume` 쿼리 파라미터를 읽어 세션+메시지를 DB에서 조회, 기존
+    `groupMessagesByRole()`을 그대로 재사용해 `HistoryByRole`을 복원(킥오프 트리거 메시지도
+    DB에 저장돼 있어서 실시간 진행 중이던 상태와 완전히 같은 모양이 됨). 대화가 남아있는 마지막
+    면접관부터 이어서 보여주도록 `interviewerIndex`를 역순 탐색으로 계산. 이미 리포트가 있는
+    세션(완료됨)은 이어서 진행할 대상에서 제외
+  - `InterviewChat`이 `resumeData` prop을 받아 `started`/`interviewerIndex`/`history`/
+    `sessionId`/`jobRole`/이력서·포트폴리오 내용을 그 값으로 초기화 — 처음 진입 시 곧바로
+    대화 화면부터 보여줌(홈 폼 생략)
+  - **리마운트 처리**: `<InterviewChat key={resumeData?.sessionId ?? "new"} .../>`로 세션이
+    바뀌거나 새 면접으로 전환될 때마다 강제로 새로 마운트되게 함 — 안 그러면 클라이언트
+    컴포넌트가 유지된 채 props만 바뀌어 useState 초기값이 다시 적용되지 않는(이미 "새 면접
+    시작" 버그에서 겪었던 것과 같은) 문제가 재발했을 것
+  - `HistorySidebar`의 삭제 로직을 `href` 문자열 비교 대신 호출부가 직접 판단한 `isCurrent`
+    불리언을 받도록 리팩터링 — 진행 중인 항목의 href가 `/?resume=id`라 기존 `pathname === href`
+    비교로는 절대 매치가 안 됐음(pathname엔 쿼리스트링이 안 잡힘)
+- tsc/lint/build 전부 통과 확인. schema.sql 변경 없음(기존 테이블/컬럼만 다른 방식으로 조회)
+
 ### 2026-09-17
 - **불필요한 코드 전체 검토** (사용자 요청) — `tsc --noUnusedLocals --noUnusedParameters` 전체
   검사, 모든 컴포넌트 파일의 import 여부, package.json 의존성, admin.ts의 export, globals.css
