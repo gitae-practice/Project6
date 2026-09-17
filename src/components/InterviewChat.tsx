@@ -26,23 +26,37 @@ const EMPTY_HISTORY: HistoryByRole = {
   pressure: [],
 };
 
-export function InterviewChat({ userName }: { userName?: string | null }) {
+// "새 면접 시작"으로 나가버려서 DB에만 남아있던 진행 중인 면접을 사이드바에서 다시 눌러
+// 이어서 진행할 때 필요한 데이터 — 서버 컴포넌트(page.tsx)가 DB에서 세션+메시지를 읽어와
+// 만들어서 넘겨준다.
+export interface ResumeData {
+  sessionId: string;
+  jobRole: string;
+  resumeContent: string; // 이미 합쳐진 내용이라 수기입력/PDF 구분이 필요 없음
+  portfolioContent: string;
+  history: HistoryByRole;
+  interviewerIndex: number; // 대화가 남아있는 마지막 면접관부터 이어서 보여준다
+}
+
+export function InterviewChat({ userName, resumeData }: { userName?: string | null; resumeData?: ResumeData | null }) {
   const router = useRouter();
-  const [started, setStarted] = useState(false);
-  const [interviewerIndex, setInterviewerIndex] = useState(0);
-  const [history, setHistory] = useState<HistoryByRole>(EMPTY_HISTORY);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [started, setStarted] = useState(Boolean(resumeData));
+  const [interviewerIndex, setInterviewerIndex] = useState(resumeData?.interviewerIndex ?? 0);
+  const [history, setHistory] = useState<HistoryByRole>(resumeData?.history ?? EMPTY_HISTORY);
+  const [sessionId, setSessionId] = useState<string | null>(resumeData?.sessionId ?? null);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [jobRole, setJobRole] = useState("");
+  const [jobRole, setJobRole] = useState(resumeData?.jobRole ?? "");
   const [resumeContent, setResumeContent] = useState(""); // 텍스트박스 수기 입력 (PDF와 무관하게 별개로 유지)
   const [resumeFileName, setResumeFileName] = useState("");
-  const [resumeFileText, setResumeFileText] = useState(""); // PDF에서 추출한 내용 — 화면에 노출하지 않고 기억만 해둠
+  // PDF에서 추출한 내용 — 화면에 노출하지 않고 기억만 해둠. 이어서 진행하는 경우엔 DB에 저장된
+  // 이력서 내용을 여기 그대로 넣어둔다(수기입력/PDF 구분은 계속 진행하는 데는 의미가 없으므로).
+  const [resumeFileText, setResumeFileText] = useState(resumeData?.resumeContent ?? "");
   const [isExtractingResume, setIsExtractingResume] = useState(false);
   const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
   const [portfolioFileName, setPortfolioFileName] = useState("");
-  const [portfolioFileText, setPortfolioFileText] = useState(""); // 포트폴리오는 선택 사항 — 비어있어도 됨
+  const [portfolioFileText, setPortfolioFileText] = useState(resumeData?.portfolioContent ?? ""); // 포트폴리오는 선택 사항 — 비어있어도 됨
   const [isExtractingPortfolio, setIsExtractingPortfolio] = useState(false);
   const [portfolioUploadError, setPortfolioUploadError] = useState<string | null>(null);
   const [report, setReport] = useState<InterviewReport | null>(null);
