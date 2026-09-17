@@ -2,6 +2,18 @@
 
 ## 완료된 작업
 
+### 2026-09-17
+- **불필요한 코드 전체 검토** (사용자 요청) — `tsc --noUnusedLocals --noUnusedParameters` 전체
+  검사, 모든 컴포넌트 파일의 import 여부, package.json 의존성, admin.ts의 export, globals.css
+  커스텀 클래스, Supabase RPC 함수-앱 코드 매칭까지 교차 확인. **미사용 변수/함수/컴포넌트/
+  의존성/CSS는 전혀 없었음** — 매 작업마다 tsc/lint를 꾸준히 돌린 덕분으로 보임
+  - 유일하게 발견된 정리 대상: STT/TTS 디버깅 과정에서 남겨둔 진단용 `console.log` 7개
+    (recognition의 onstart/onaudiostart/onaudioend/onspeechstart/onspeechend/onerror의
+    no-speech·aborted 케이스, TTS의 "역할별 배정된 목소리" 로그) — 원인 진단이 끝나 이제는
+    브라우저 콘솔 잡음만 남기므로 사용자 확인 후 전부 제거. 기능(음성 인식/합성 자체) 동작에는
+    영향 없음(순수 로그만 제거)
+- tsc/lint/build 전부 통과 확인
+
 ### 2026-09-16
 - **면접 진행 중 이전 면접관으로 돌아가기 기능 구현** (전날 메모해둔 작업) — 스텝 인디케이터에서
   완료 표시(체크 아이콘)된 면접관 원을 누르면 그 면접관 화면으로 돌아갈 수 있음. 진행 중이거나
