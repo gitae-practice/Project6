@@ -163,27 +163,13 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       setInput(listeningBaseTextRef.current + interimTranscript);
     };
     recognition.onerror = (event) => {
-      // console.debug는 크롬 콘솔 기본 필터("Verbose" 꺼짐)에서 아예 안 보일 수 있어서
-      // console.log/console.warn으로 남긴다 — 진단용 로그가 안 보이면 원인 파악 자체가 안 된다.
       // "no-speech"(말을 아예 안 함)와 "aborted"(사용자가 버튼으로 직접 멈춤)는 실패라기보다
-      // 자연스러운 상황이라 화면에는 에러로 보여주지 않지만, 콘솔에는 남긴다.
-      if (event.error === "no-speech" || event.error === "aborted") {
-        console.log("[음성인식] 종료:", event.error);
-        return;
-      }
+      // 자연스러운 상황이라 화면에는 에러로 보여주지 않는다.
+      if (event.error === "no-speech" || event.error === "aborted") return;
       console.error("음성 인식 오류:", event.error, event.message);
       setSttError(translateSpeechError(event.error));
     };
     recognition.onend = () => setIsListening(false); // 한 문장 인식이 끝나면(또는 무음 타임아웃) 자동으로 꺼진다
-    // 아래 4개는 "듣고 있는 것처럼 보이는데 텍스트가 안 채워진다"는 문제가 마이크(오디오 캡처)
-    // 단계 문제인지, 그 뒤 인식 엔진(네트워크) 단계 문제인지 구분하려고 남기는 진단용 로그다.
-    // 예) onaudiostart조차 안 찍히면 브라우저가 마이크 자체를 못 받아온 것(OS 마이크 권한/장치
-    // 문제일 가능성이 크고, onspeechstart는 찍히는데 결과가 없으면 인식 서버 통신 문제일 수 있다.
-    recognition.onstart = () => console.log("[음성인식] 시작됨 (recognition.start() 호출 성공)");
-    recognition.onaudiostart = () => console.log("[음성인식] 마이크 캡처 시작");
-    recognition.onaudioend = () => console.log("[음성인식] 마이크 캡처 종료");
-    recognition.onspeechstart = () => console.log("[음성인식] 말소리 감지됨");
-    recognition.onspeechend = () => console.log("[음성인식] 말소리 끝남");
 
     recognitionRef.current = recognition;
     try {
@@ -240,12 +226,6 @@ export function InterviewChat({ userName }: { userName?: string | null }) {
       if (voice) utterance.voice = voice;
       utterance.pitch = ROLE_VOICE_STYLE[role].pitch;
       utterance.rate = ROLE_VOICE_STYLE[role].rate;
-      // 어떤 목소리가 배정됐는지, 실제로 재생이 "시작"됐는지까지 남겨서 특정 면접관만 안 들리는
-      // 문제가 목소리 자체(network voice 등) 때문인지 확인할 수 있게 한다.
-      console.log(
-        `[음성합성] ${role} 역할에 배정된 목소리:`,
-        voice ? `${voice.name} (${voice.lang}, ${voice.localService ? "로컬" : "네트워크"})` : "(없음 — 브라우저 기본값 사용)"
-      );
       if (key) {
         utterance.onstart = () => {
           setActiveSpeechKey(key);
