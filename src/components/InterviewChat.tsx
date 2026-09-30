@@ -366,7 +366,14 @@ export function InterviewChat({ userName, resumeData }: { userName?: string | nu
           error?: string;
         };
 
-        if (payload.sessionId) setSessionId(payload.sessionId);
+        if (payload.sessionId) {
+          setSessionId(payload.sessionId);
+          // 방금 막 새로 생성된 세션(면접을 이제 막 시작한 경우)이면, 사이드바의 "진행 중인
+          // 면접" 목록에도 바로 반영되도록 서버 컴포넌트(layout.tsx) 데이터를 새로 읽어온다.
+          // 같은 "/" 경로 안에서 클라이언트 상태만 바뀌는 화면이라, 그냥 두면 사이드바가
+          // 갱신될 계기가 없어(라우트 자체가 안 바뀌므로) 새로고침 전까지 안 보이게 된다.
+          if (!sessionId) router.refresh();
+        }
 
         if (payload.text) {
           finalContent += payload.text;
