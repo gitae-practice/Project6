@@ -105,7 +105,3 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 ## DB 설정
 
 `supabase/schema.sql` 파일을 Supabase SQL Editor에서 실행하면 필요한 테이블과 함수가 생성된다.
-
-## 다음 계획
-
-- Vercel 배포 (최우선순위는 아니고 완성도를 더 높인 뒤 진행 예정)
